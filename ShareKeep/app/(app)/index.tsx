@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { router } from 'expo-router';
 import TreeScene from '../../components/TreeScene';
 
 type Mode = 'recipient' | 'agent';
@@ -88,8 +89,11 @@ function RecipientContent() {
       <Text style={styles.contentDesc}>
         不在時の荷物を近所の代理人に一時保管してもらえます。
       </Text>
-      <TouchableOpacity style={styles.actionButton}>
-        <Text style={styles.actionButtonText}>荷物を登録する</Text>
+      <TouchableOpacity
+        style={styles.actionButton}
+        onPress={() => router.push('/(app)/recipient/packages')}
+      >
+        <Text style={styles.actionButtonText}>荷物一覧を見る</Text>
       </TouchableOpacity>
     </View>
   );
