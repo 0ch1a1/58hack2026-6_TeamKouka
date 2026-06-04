@@ -129,8 +129,19 @@ export default function PackagesScreen() {
 
 function PackageCard({ pkg }: { pkg: Package }) {
   const status = STATUS_CONFIG[pkg.status];
+
+  const handlePress = () => {
+    if (pkg.status === 'waiting') {
+      router.push({
+        pathname: '/(app)/recipient/matching',
+        params: { packageName: pkg.name, trackingNumber: pkg.trackingNumber },
+      });
+    }
+    // TODO: stored → pickup-ready 画面、completed → 完了画面へ遷移
+  };
+
   return (
-    <View style={styles.card}>
+    <TouchableOpacity onPress={handlePress} activeOpacity={0.8} style={styles.card}>
       <View style={styles.cardHeader}>
         <View style={styles.cardTitleRow}>
           <Ionicons name="cube-outline" size={18} color="#1A7A4C" />
@@ -161,7 +172,7 @@ function PackageCard({ pkg }: { pkg: Package }) {
           <Text style={styles.agentText}>代理人: {pkg.agentName}</Text>
         </View>
       )}
-    </View>
+    </TouchableOpacity>
   );
 }
 
