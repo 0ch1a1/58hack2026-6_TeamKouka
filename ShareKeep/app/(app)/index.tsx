@@ -106,7 +106,13 @@ function AgentContent() {
       <Text style={styles.contentDesc}>
         近所の荷物を預かってCO2削減に貢献しましょう。
       </Text>
-      <TouchableOpacity style={styles.actionButton}>
+      <TouchableOpacity
+        style={styles.actionButton}
+        onPress={() => router.push('/(app)/agent/profile')}
+      >
+        <Text style={styles.actionButtonText}>プロファイルを設定する</Text>
+      </TouchableOpacity>
+      <TouchableOpacity style={[styles.actionButton, { marginTop: 8 }]}>
         <Text style={styles.actionButtonText}>受取対応を確認する</Text>
       </TouchableOpacity>
     </View>
