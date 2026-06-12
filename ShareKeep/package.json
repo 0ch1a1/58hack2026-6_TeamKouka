@@ -4,7 +4,9 @@
   "main": "expo-router/entry",
   "dependencies": {
     "@expo/vector-icons": "^15.1.1",
+    "@react-native-async-storage/async-storage": "^2.2.0",
     "@react-three/fiber": "^9.6.1",
+    "@supabase/supabase-js": "^2.108.1",
     "expo": "~56.0.8",
     "expo-constants": "~56.0.16",
     "expo-gl": "~56.0.5",
@@ -15,6 +17,7 @@
     "react-native": "0.85.3",
     "react-native-safe-area-context": "~5.7.0",
     "react-native-screens": "4.25.2",
+    "react-native-url-polyfill": "^3.0.0",
     "three": "^0.184.0"
   },
   "devDependencies": {

@@ -8,17 +8,31 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { supabase } from '../../lib/supabase';
 
 export default function SignInScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  const handleSignIn = () => {
-    // TODO: Supabase 認証と接続（role: 'user'）
-    router.replace('/(app)');
+  const handleSignIn = async () => {
+    if (!email || !password) {
+      Alert.alert('入力エラー', 'メールアドレスとパスワードを入力してください。');
+      return;
+    }
+
+    setLoading(true);
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    setLoading(false);
+
+    if (error) {
+      Alert.alert('ログイン失敗', 'メールアドレスまたはパスワードが正しくありません。');
+    }
   };
 
   return (
@@ -51,8 +65,12 @@ export default function SignInScreen() {
           secureTextEntry
         />
 
-        <TouchableOpacity style={styles.primaryButton} onPress={handleSignIn}>
-          <Text style={styles.primaryButtonText}>ログイン</Text>
+        <TouchableOpacity style={styles.primaryButton} onPress={handleSignIn} disabled={loading}>
+          {loading ? (
+            <ActivityIndicator color="#FFFFFF" />
+          ) : (
+            <Text style={styles.primaryButtonText}>ログイン</Text>
+          )}
         </TouchableOpacity>
 
         <View style={styles.footer}>
@@ -62,7 +80,6 @@ export default function SignInScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* 配達員ログイン（サブリンク） */}
         <TouchableOpacity style={styles.driverLink} onPress={() => router.push('/(auth)/sign-in-driver')}>
           <Text style={styles.driverLinkText}>配達員の方はこちら</Text>
         </TouchableOpacity>
@@ -72,10 +89,7 @@ export default function SignInScreen() {
 }
 
 const styles = StyleSheet.create({
-  flex: {
-    flex: 1,
-    backgroundColor: '#F0FAF4',
-  },
+  flex: { flex: 1, backgroundColor: '#F0FAF4' },
   container: {
     flexGrow: 1,
     alignItems: 'center',
@@ -83,21 +97,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 32,
     paddingVertical: 48,
   },
-  logoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  logo: {
-    fontSize: 36,
-    fontWeight: '800',
-    color: '#1A7A4C',
-  },
-  subtitle: {
-    fontSize: 14,
-    color: '#6B7280',
-    marginBottom: 40,
-  },
+  logoRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
+  logo: { fontSize: 36, fontWeight: '800', color: '#1A7A4C' },
+  subtitle: { fontSize: 14, color: '#6B7280', marginBottom: 40 },
   input: {
     width: '100%',
     height: 52,
@@ -119,32 +121,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginTop: 8,
   },
-  primaryButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  footer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 24,
-    gap: 4,
-  },
-  footerText: {
-    fontSize: 14,
-    color: '#6B7280',
-  },
-  linkText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#1A7A4C',
-  },
-  driverLink: {
-    marginTop: 32,
-  },
-  driverLinkText: {
-    fontSize: 12,
-    color: '#9CA3AF',
-    textDecorationLine: 'underline',
-  },
+  primaryButtonText: { color: '#FFFFFF', fontSize: 16, fontWeight: '700' },
+  footer: { flexDirection: 'row', alignItems: 'center', marginTop: 24, gap: 4 },
+  footerText: { fontSize: 14, color: '#6B7280' },
+  linkText: { fontSize: 14, fontWeight: '600', color: '#1A7A4C' },
+  driverLink: { marginTop: 32 },
+  driverLinkText: { fontSize: 12, color: '#9CA3AF', textDecorationLine: 'underline' },
 });
