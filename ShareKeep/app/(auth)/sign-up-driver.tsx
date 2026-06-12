@@ -9,9 +9,11 @@ import {
   Platform,
   ScrollView,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { supabase } from '../../lib/supabase';
 
 export default function SignUpDriverScreen() {
   const [name, setName] = useState('');
@@ -20,8 +22,9 @@ export default function SignUpDriverScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  const handleSignUp = () => {
+  const handleSignUp = async () => {
     if (!name || !companyName || !employeeId || !email || !password || !confirmPassword) {
       Alert.alert('入力エラー', 'すべての項目を入力してください。');
       return;
@@ -30,8 +33,42 @@ export default function SignUpDriverScreen() {
       Alert.alert('入力エラー', 'パスワードが一致しません。');
       return;
     }
-    // TODO: Supabase 認証と接続（role: 'driver', company_name, employee_id）
-    router.replace('/(app)');
+    if (password.length < 6) {
+      Alert.alert('入力エラー', 'パスワードは6文字以上で入力してください。');
+      return;
+    }
+
+    setLoading(true);
+
+    const { data, error } = await supabase.auth.signUp({ email, password });
+
+    if (error) {
+      setLoading(false);
+      if (error.message.includes('already registered')) {
+        Alert.alert('登録エラー', 'このメールアドレスはすでに登録されています。');
+      } else {
+        Alert.alert('登録エラー', error.message);
+      }
+      return;
+    }
+
+    if (data.user) {
+      const { error: profileError } = await supabase.from('profiles').insert({
+        id: data.user.id,
+        role: 'driver',
+        full_name: name,
+        company_name: companyName,
+        employee_id: employeeId,
+      });
+
+      if (profileError) {
+        setLoading(false);
+        Alert.alert('エラー', 'プロフィールの作成に失敗しました。');
+        return;
+      }
+    }
+
+    setLoading(false);
   };
 
   return (
@@ -104,8 +141,12 @@ export default function SignUpDriverScreen() {
           secureTextEntry
         />
 
-        <TouchableOpacity style={styles.primaryButton} onPress={handleSignUp}>
-          <Text style={styles.primaryButtonText}>配達員として登録する</Text>
+        <TouchableOpacity style={styles.primaryButton} onPress={handleSignUp} disabled={loading}>
+          {loading ? (
+            <ActivityIndicator color="#FFFFFF" />
+          ) : (
+            <Text style={styles.primaryButtonText}>配達員として登録する</Text>
+          )}
         </TouchableOpacity>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -113,10 +154,7 @@ export default function SignUpDriverScreen() {
 }
 
 const styles = StyleSheet.create({
-  flex: {
-    flex: 1,
-    backgroundColor: '#F0FAF4',
-  },
+  flex: { flex: 1, backgroundColor: '#F0FAF4' },
   container: {
     flexGrow: 1,
     alignItems: 'center',
@@ -130,27 +168,10 @@ const styles = StyleSheet.create({
     marginBottom: 24,
     gap: 2,
   },
-  backText: {
-    fontSize: 14,
-    color: '#1A7A4C',
-    fontWeight: '600',
-  },
-  logoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 4,
-  },
-  logo: {
-    fontSize: 28,
-    fontWeight: '800',
-    color: '#1A7A4C',
-  },
-  title: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: '#111827',
-    marginBottom: 28,
-  },
+  backText: { fontSize: 14, color: '#1A7A4C', fontWeight: '600' },
+  logoRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 4 },
+  logo: { fontSize: 28, fontWeight: '800', color: '#1A7A4C' },
+  title: { fontSize: 22, fontWeight: '700', color: '#111827', marginBottom: 28 },
   sectionLabel: {
     alignSelf: 'flex-start',
     fontSize: 12,
@@ -181,9 +202,5 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginTop: 16,
   },
-  primaryButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '700',
-  },
+  primaryButtonText: { color: '#FFFFFF', fontSize: 16, fontWeight: '700' },
 });
