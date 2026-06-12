@@ -13,6 +13,8 @@ export interface Profile {
   role: Role;
   full_name: string;
   phone: string | null;
+  company_name: string | null;
+  employee_id: string | null;
   created_at: string;
 }
 

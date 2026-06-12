@@ -57,6 +57,8 @@ export default function SignUpDriverScreen() {
         id: data.user.id,
         role: 'driver',
         full_name: name,
+        company_name: companyName,
+        employee_id: employeeId,
       });
 
       if (profileError) {
