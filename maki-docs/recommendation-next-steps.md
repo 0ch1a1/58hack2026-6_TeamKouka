@@ -38,15 +38,34 @@ DB契約は検証済み：`recommendation-service` の RPC 呼び出し・`recom
   - より正確にするなら geocode Edge Function の受取人版（`geocode-agent-address` 流用/汎用化）＋ サインアップ/設定で住所入力 → `upsert_recipient_profile` RPC。
 - **型チェック/テスト**：worktree に `node_modules` 未導入のため未実行。`cd ShareKeep && npm install && npm test` で各自確認。
 
+## 🔐 認証強化（option 2 / レビュー指摘 critical・high 対応・実装済み）
+
+サービスの公開API化と、任意IDでのRPC書き換えを塞いだ。詳細は recommendation-api.md §7 も参照。
+
+1. **FastAPI 認証**（`recommendation-service/app/main.py`）
+   - `/recommend`・`/feedback`：クライアントの Supabase ログイン JWT（`Authorization: Bearer`）を検証し、`recipient_id` を**トークンから確定**（クライアント詐称を防ぐ）。parcel 所有者チェックも実施。
+   - `/retrain`：`X-Admin-Key` ヘッダ（`ADMIN_API_KEY`）で保護。未設定なら 503。
+   - `RECOMMENDATION_REQUIRE_AUTH=false` でローカル検証時のみ認証無効化可（本番 true）。
+2. **トークン検証**（`app/supabase_client.py: verify_user_token`）：Supabase に問い合わせて検証（JWT Secret 不要・公開鍵のみ）。
+3. **クライアント**（`features/recommend.ts`）：`supabase.auth.getSession()` の access_token を Bearer 送出。**アプリに秘密鍵は持たない**。
+4. **RPC 所有者ガード**（`supabase/migrations/20260613160000_recommendation_rpc_guards.sql`）
+   - `mark_recommendation_chosen`/`record_recommendation_outcome`/`upsert_recipient_profile` を「本人のみ（service_role はバイパス）」に。
+   - `get_recommendation_candidates`（代理人PII返却）は `service_role` 限定に revoke/grant。
+
 ## 👤 あなた（権限・キー・インフラ）
 
 1. **Supabase PAT を revoke→再発行**（過去の会話に `sbp_2671…` が露出したため）
-2. **migration適用**：`supabase db push`（DB書き込み権限）
+2. **migration適用**：`supabase db push`（DB書き込み権限）。**2ファイル**適用される：
+   - `20260613140000_recommendation.sql`（基盤）／`20260613160000_recommendation_rpc_guards.sql`（認証強化）
 3. **service_role キー**を 2か所の `.env` に設定：
    - `ShareKeep/.env`（seed用）/ `recommendation-service/.env`（サービス用）
-4. **シード実行**：`cd ShareKeep && npm install && npm run seed:agents`（本番DBに代理人8人）
-5. **Pythonサービス**：`pip install -r recommendation-service/requirements.txt` →（任意）`python -m training.generate_synthetic && python -m training.train` → `uvicorn app.main:app --reload` → どこかにデプロイ（Railway/Render/Cloud Run等）
-6. デプロイURLを `EXPO_PUBLIC_RECOMMENDATION_URL` に設定
+4. 🆕 **`recommendation-service/.env` に認証用の値**を設定（`.env.example` 参照）：
+   - `SUPABASE_ANON_KEY`：アプリの `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY` と同じ公開鍵でよい
+   - `ADMIN_API_KEY`：`/retrain` 保護用。自分でランダム文字列を決める（例 `openssl rand -hex 16`）
+   - （`SUPABASE_JWT_SECRET` は不要。検証は Supabase 問い合わせ方式のため）
+5. **シード実行**：`cd ShareKeep && npm install && npm run seed:agents`（本番DBに代理人8人）
+6. **Pythonサービス**：`pip install -r recommendation-service/requirements.txt` →（任意）`python -m training.generate_synthetic && python -m training.train` → `uvicorn app.main:app --reload` → どこかにデプロイ（Railway/Render/Cloud Run等）
+7. デプロイURLを `EXPO_PUBLIC_RECOMMENDATION_URL` に設定（**クライアント側に追加の秘密鍵は不要**）
 
 ## 契約の要点（実装時の参照用）
 

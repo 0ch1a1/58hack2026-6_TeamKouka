@@ -20,10 +20,21 @@ class Settings:
     supabase_url: str | None
     supabase_service_role_key: str | None
     model_path: Path
+    # 認証まわり（option 2）
+    supabase_anon_key: str | None = None   # クライアントの JWT 検証に使う公開鍵
+    admin_api_key: str | None = None        # /retrain を保護する管理者キー
+    require_auth: bool = True               # /recommend・/feedback に JWT を必須化
     default_radius_m: int = 2000
     default_top_k: int = 5
     default_capacity: int = 3
     timezone: str = "Asia/Tokyo"
+
+
+def _env_bool(name: str, default: bool) -> bool:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() not in {"0", "false", "no", "off", ""}
 
 
 def get_settings() -> Settings:
@@ -36,6 +47,11 @@ def get_settings() -> Settings:
     return Settings(
         supabase_url=os.getenv("SUPABASE_URL"),
         supabase_service_role_key=os.getenv("SUPABASE_SERVICE_ROLE_KEY"),
+        # ANON / PUBLISHABLE どちらの名前でも拾う（アプリ側と同じ公開鍵）
+        supabase_anon_key=os.getenv("SUPABASE_ANON_KEY")
+        or os.getenv("SUPABASE_PUBLISHABLE_KEY"),
+        admin_api_key=os.getenv("ADMIN_API_KEY"),
+        require_auth=_env_bool("RECOMMENDATION_REQUIRE_AUTH", True),
         model_path=model_path,
         default_radius_m=int(os.getenv("DEFAULT_RADIUS_M", "2000")),
         default_top_k=int(os.getenv("DEFAULT_TOP_K", "5")),

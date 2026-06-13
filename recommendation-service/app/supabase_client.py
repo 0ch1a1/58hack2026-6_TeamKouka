@@ -1,11 +1,41 @@
 from __future__ import annotations
 
 import re
+from functools import lru_cache
 from typing import Any
 
 from supabase import Client, create_client
 
 from app.config import Settings
+
+
+@lru_cache(maxsize=4)
+def _auth_client(url: str, key: str) -> Client:
+    # トークン検証用の軽量クライアント（公開鍵で作成）。リクエストごとの再生成を避ける。
+    return create_client(url, key)
+
+
+def verify_user_token(settings: Settings, token: str) -> str:
+    """Supabase にトークンの有効性を問い合わせ、ユーザ ID を返す。
+
+    無効・期限切れは PermissionError、設定不足は ValueError を送出する。
+    """
+    key = settings.supabase_anon_key or settings.supabase_service_role_key
+    if not settings.supabase_url or not key:
+        raise ValueError(
+            "SUPABASE_URL and SUPABASE_ANON_KEY are required to verify auth tokens"
+        )
+    client = _auth_client(settings.supabase_url, key)
+    try:
+        response = client.auth.get_user(token)
+    except Exception as exc:  # supabase-py はトークン不正で例外を投げる
+        raise PermissionError("Invalid or expired token") from exc
+
+    user = getattr(response, "user", None)
+    user_id = getattr(user, "id", None) if user is not None else None
+    if not user_id:
+        raise PermissionError("Invalid or expired token")
+    return str(user_id)
 
 
 class SupabaseGateway:
@@ -65,6 +95,21 @@ class SupabaseGateway:
             "Pass latitude/longitude or add a get_recipient_coordinates RPC "
             "that returns ST_Y(location::geometry) as lat and ST_X(location::geometry) as lng."
         )
+
+    def get_parcel_recipient_id(self, parcel_id: str) -> str | None:
+        # parcel の所有者（受取人）を返す。認証ユーザの所有チェックに使う。
+        response = (
+            self.client.table("parcels")
+            .select("recipient_id")
+            .eq("id", parcel_id)
+            .limit(1)
+            .execute()
+        )
+        rows = response.data or []
+        if not rows:
+            return None
+        recipient_id = rows[0].get("recipient_id")
+        return str(recipient_id) if recipient_id is not None else None
 
     def insert_recommendation_logs(self, rows: list[dict[str, Any]]) -> None:
         if not rows:
