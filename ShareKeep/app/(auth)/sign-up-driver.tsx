@@ -27,7 +27,7 @@ export default function SignUpDriverScreen() {
 
     setLoading(true);
     const result = await signUpWithProfile(email, password, {
-      role: 'driver',
+      role: 'delivery_company',
       full_name: name,
       company_name: companyName,
       employee_id: employeeId,
