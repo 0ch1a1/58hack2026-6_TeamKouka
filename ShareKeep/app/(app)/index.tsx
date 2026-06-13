@@ -5,19 +5,9 @@ import { router } from 'expo-router';
 import TreeScene from '../../components/TreeScene';
 import { colors } from '../../lib/theme';
 import { Card } from '../../components/ui';
-import { getProfile } from '../../features/auth';
-import type { Role } from '../../lib/database.types';
+import { getMyRole } from '../../features/auth';
 
 type Mode = 'recipient' | 'agent';
-
-// get_profile RPC の戻りはオブジェクト/配列いずれの可能性もあるため role を吸収して取り出す。
-function extractRole(profile: unknown): Role | null {
-  const row = Array.isArray(profile) ? profile[0] : profile;
-  if (row && typeof row === 'object' && 'role' in row) {
-    return (row as { role?: Role }).role ?? null;
-  }
-  return null;
-}
 
 // XP からステージを算出（後でSupabaseのuser.xpと接続）
 function xpToStage(xp: number): number {
@@ -39,8 +29,7 @@ export default function HomeScreen() {
     let active = true;
     (async () => {
       try {
-        const profile = await getProfile();
-        const role = extractRole(profile);
+        const role = await getMyRole();
         if (active && role === 'delivery_company') {
           router.replace('/(app)/driver');
           return; // 遷移するので roleChecked は立てない（ホームを一瞬も描かない）

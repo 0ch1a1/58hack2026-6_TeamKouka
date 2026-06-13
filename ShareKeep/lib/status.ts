@@ -61,8 +61,9 @@ export const DRIVER_STATUS_LABEL: Record<ParcelStatus, string> = {
 //   fail   : 不在報告（out_for_delivery → delivery_failed）
 //   match  : 代理人を探す（delivery_failed → agent_assigned）
 //   scan   : 代理人QRを読む（agent_assigned → delivered_to_agent）
-//   none   : 配達員の操作は無い（受取人/代理人フェーズ）
-export type DriverAction = 'start' | 'fail' | 'match' | 'scan' | 'none';
+// 配達員の操作が無い状態（受取人/代理人フェーズ）は空配列を返す。
+// 画面側は actions.map(...) するだけでよく、'none' の special-case が不要。
+export type DriverAction = 'start' | 'fail' | 'match' | 'scan';
 
 export function driverActionsFor(s: ParcelStatus | string | null): DriverAction[] {
   switch (s) {
@@ -75,6 +76,6 @@ export function driverActionsFor(s: ParcelStatus | string | null): DriverAction[
     case 'agent_assigned':
       return ['scan'];
     default:
-      return ['none'];
+      return [];
   }
 }
