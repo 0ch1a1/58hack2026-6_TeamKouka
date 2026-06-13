@@ -92,6 +92,19 @@ def _env_csv(name: str) -> tuple[str, ...]:
     return tuple(item.strip() for item in raw.split(",") if item.strip())
 
 
+def _cors_origins() -> tuple[str, ...]:
+    # CORS allowlist。ワイルドカード "*" は allow_credentials=True と併用できない
+    # （ブラウザ仕様）。誤設定を黙って通すと credentials 付き全オリジン許可になるため、
+    # "*" を含む場合は起動時に明確に失敗させる。
+    origins = _env_csv("RECOMMENDATION_CORS_ORIGINS")
+    if "*" in origins:
+        raise ValueError(
+            "RECOMMENDATION_CORS_ORIGINS に '*' は使用できません"
+            "（credentials と併用不可）。許可するオリジンを明示的に列挙してください。"
+        )
+    return origins
+
+
 def get_settings() -> Settings:
     model_path = Path(
         os.getenv("MODEL_PATH", str(SERVICE_ROOT / "models" / "model.joblib"))
@@ -107,7 +120,7 @@ def get_settings() -> Settings:
         or os.getenv("SUPABASE_PUBLISHABLE_KEY"),
         admin_api_key=os.getenv("ADMIN_API_KEY"),
         require_auth=_env_bool("RECOMMENDATION_REQUIRE_AUTH", True),
-        cors_allow_origins=_env_csv("RECOMMENDATION_CORS_ORIGINS"),
+        cors_allow_origins=_cors_origins(),
         model_path=model_path,
         default_radius_m=int(os.getenv("DEFAULT_RADIUS_M", "2000")),
         default_top_k=int(os.getenv("DEFAULT_TOP_K", "5")),
