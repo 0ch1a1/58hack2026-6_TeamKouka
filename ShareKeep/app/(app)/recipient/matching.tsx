@@ -324,8 +324,9 @@ function AgentCard({
 
   // breakdown（特徴量名→0–1）を 3 因子に集約してバー表示（lib/scoring.ts と同じ語彙）。
   const factors = factorsFromBreakdown(agent.breakdown);
-  // 総合スコアは推薦サービスの score をそのまま表示（0–100 想定。範囲外は丸める）。
-  const totalScore = Math.round(Math.max(0, Math.min(100, agent.score)));
+  // 総合スコアは推薦サービスの score（0–1 の確率）を 0–100 点に換算して表示。
+  // ※ score をそのまま丸めると 0.87 が「1点」になる不具合になるため必ず ×100 する。
+  const totalScore = Math.round(Math.max(0, Math.min(100, agent.score * 100)));
 
   // プライバシー段階開示（確定前）。候補一覧では詳細住所は出さず概略のみ。
   // RecommendedAgent は住所を持たないため roundedLabel は距離ベースの概略にする。

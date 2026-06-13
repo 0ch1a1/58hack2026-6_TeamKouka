@@ -37,7 +37,13 @@ function useCountUp(target: number, duration: number, start: boolean) {
   const [value, setValue] = useState(0);
 
   useEffect(() => {
-    if (!start) return;
+    // 非表示の間は 0 に戻し、再表示(visible=false→true)でも 0 からカウントアップさせる。
+    if (!start) {
+      anim.setValue(0);
+      setValue(0);
+      return;
+    }
+    anim.setValue(0);
     const id = anim.addListener(({ value: v }) => setValue(v));
     Animated.timing(anim, {
       toValue: target,
