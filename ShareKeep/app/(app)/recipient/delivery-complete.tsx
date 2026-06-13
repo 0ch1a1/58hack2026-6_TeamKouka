@@ -10,6 +10,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { supabase } from '../../../lib/supabase';
+import { fetchMyParcels } from '../../../features/parcels';
 import { colors } from '../../../lib/theme';
 import { PrimaryButton, Card, InfoRow } from '../../../components/ui';
 
@@ -28,27 +29,34 @@ export default function DeliveryCompleteScreen() {
     if (!parcelId) { setLoading(false); return; }
 
     const fetchData = async () => {
-      const [parcelRes, pointRes] = await Promise.all([
-        supabase
-          .from('parcels')
-          .select('tracking_no, co2_saved_kg')
-          .eq('id', parcelId)
-          .single(),
-        supabase
-          .from('point_transactions')
-          .select('points')
-          .eq('transaction_type', 'delivery_complete')
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .maybeSingle(),
-      ]);
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
 
-      setResult({
-        trackingNo: parcelRes.data?.tracking_no ?? '—',
-        co2Saved: parcelRes.data?.co2_saved_kg ?? 0,
-        pointsEarned: pointRes.data?.points ?? 0,
-      });
-      setLoading(false);
+        const [parcels, pointRes] = await Promise.all([
+          user ? fetchMyParcels(user.id) : Promise.resolve([]),
+          // point_transactions には feature 関数がないため直接読みのまま残置
+          supabase
+            .from('point_transactions')
+            .select('points')
+            .eq('transaction_type', 'delivery_complete')
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle(),
+        ]);
+
+        const parcel = parcels.find((p) => p.id === parcelId);
+
+        setResult({
+          trackingNo: parcel?.tracking_no ?? '—',
+          co2Saved: Number(parcel?.co2_saved_kg ?? 0),
+          pointsEarned: pointRes.data?.points ?? 0,
+        });
+      } catch {
+        // 取得失敗時も結果画面はデフォルト表示で継続（既存UXを維持）
+        setResult({ trackingNo: '—', co2Saved: 0, pointsEarned: 0 });
+      } finally {
+        setLoading(false);
+      }
     };
 
     fetchData();
