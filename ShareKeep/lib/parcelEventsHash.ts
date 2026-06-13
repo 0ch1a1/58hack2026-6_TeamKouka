@@ -41,6 +41,16 @@ export type ChainVerifyResult = {
 // 連結文字列の構造は一意（payload_text は常に末尾の 1 フィールド）。
 const SEP = '|';
 
+// created_at を正規化してからハッシュする。
+// timestamptz は INSERT 値（クライアントの toISOString, 例 ...Z）と、DB 往復後の
+// PostgREST 返却表現（例 ...+00:00）で文字列が異なりうる。両方を `new Date().toISOString()`
+// の正準形に畳むことで、append 時のハッシュと verifyChain 時の再計算が一致する。
+// 解釈不能な値はそのまま使う（決定性のため）。
+function normalizeTimestamp(s: string): string {
+  const t = Date.parse(s);
+  return Number.isNaN(t) ? s : new Date(t).toISOString();
+}
+
 // 連結対象フィールドを構築する。null は空文字に正規化（DB の NULL 先頭ハッシュと整合）。
 function buildMessage(input: HashInput): string {
   return [
@@ -48,7 +58,7 @@ function buildMessage(input: HashInput): string {
     input.parcelId ?? '',
     input.eventType,
     input.actorId ?? '',
-    input.createdAt,
+    normalizeTimestamp(input.createdAt),
     input.payloadText,
   ].join(SEP);
 }

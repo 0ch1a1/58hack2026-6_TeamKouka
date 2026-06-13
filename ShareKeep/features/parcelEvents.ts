@@ -49,6 +49,10 @@ export type AppendParcelEventParams = {
   eventType: ParcelEventType;
   // ハッシュ対象の生文字列（任意）。未指定時は '{}'（DB DEFAULT と整合）。
   payload?: Record<string, unknown> | null;
+  // 冪等キー（任意）。同一の論理イベントを再送する可能性がある呼び出し側は、
+  // 安定した clientEventId を渡すこと（タイムアウト/レスポンス喪失時の再送で
+  // 23505 冪等パスに乗る）。未指定なら都度新規採番する＝再送では別イベント挿入になる。
+  clientEventId?: string;
 };
 
 export type AppendParcelEventResult = {
@@ -82,7 +86,8 @@ export async function appendParcelEvent(
   const payload = params.payload ?? null;
   const payloadText = payload == null ? '{}' : JSON.stringify(payload);
 
-  const clientEventId = Crypto.randomUUID();
+  // 呼び出し側が安定IDを渡せば冪等（再送で 23505 パス）。未指定は都度新規採番。
+  const clientEventId = params.clientEventId ?? Crypto.randomUUID();
   const createdAt = new Date().toISOString();
   const prevHash = await fetchLatestHash(parcelId);
 

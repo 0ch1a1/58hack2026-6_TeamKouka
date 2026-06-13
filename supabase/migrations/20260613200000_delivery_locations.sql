@@ -21,7 +21,13 @@ create policy delivery_locations_select on delivery_locations for select
 create policy delivery_locations_insert on delivery_locations for insert
   with check (exists (select 1 from parcels p where p.id = parcel_id and auth.uid() = p.assigned_agent_id));
 create policy delivery_locations_update on delivery_locations for update
-  using (exists (select 1 from parcels p where p.id = parcel_id and auth.uid() = p.assigned_agent_id));
+  using (exists (select 1 from parcels p where p.id = parcel_id and auth.uid() = p.assigned_agent_id))
+  with check (exists (select 1 from parcels p where p.id = parcel_id and auth.uid() = p.assigned_agent_id));
 
 -- Realtime 配信対象に追加（受取人画面の購読用）。
-alter publication supabase_realtime add table delivery_locations;
+-- 既に publication に登録済みでも失敗しないようガード（handover_messages migration と同方針・冪等）。
+do $$
+begin
+  alter publication supabase_realtime add table delivery_locations;
+exception when duplicate_object then null;
+end $$;
