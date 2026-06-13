@@ -16,7 +16,8 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import QRCode from 'react-native-qrcode-svg';
 import { supabase } from '../../../lib/supabase';
 import { colors } from '../../../lib/theme';
-import { ScreenHeader, Card } from '../../../components/ui';
+import { ScreenHeader, Card, StatusBadge, QuestStatusBar } from '../../../components/ui';
+import { questStatusMeta } from '../../../lib/status';
 import { generateQrToken, verifyRecipientQr, updateParcelStatus } from '../../../features/parcels';
 
 type MatchedParcel = {
@@ -152,12 +153,6 @@ export default function AgentParcelsScreen() {
     ]);
   };
 
-  const STATUS_LABEL: Record<string, string> = {
-    matched: 'マッチング済み',
-    storing: '保管中',
-    delivering: '配送中',
-  };
-
   return (
     <SafeAreaView style={styles.safe}>
       <ScreenHeader title="請負リスト" />
@@ -171,17 +166,20 @@ export default function AgentParcelsScreen() {
           data={parcels}
           keyExtractor={item => item.matchId}
           contentContainerStyle={styles.listContent}
-          renderItem={({ item }) => (
+          renderItem={({ item }) => {
+            // クエスト風表示は荷物の生 status（parcelStatus）を基準にする。
+            const quest = questStatusMeta(item.parcelStatus);
+            return (
             <Card>
               <View style={styles.cardHeader}>
                 <View style={styles.cardTitleRow}>
                   <Ionicons name="cube-outline" size={16} color={colors.green} />
                   <Text style={styles.cardTitle}>{item.trackingNo}</Text>
                 </View>
-                <View style={styles.statusBadge}>
-                  <Text style={styles.statusText}>{STATUS_LABEL[item.status] ?? item.status}</Text>
-                </View>
+                <StatusBadge label={quest.label} color={quest.color} bg="#D1FAE5" icon={quest.icon} />
               </View>
+
+              <QuestStatusBar status={item.parcelStatus} />
 
               <View style={styles.metaRow}>
                 <Ionicons name="person-outline" size={14} color="#9CA3AF" />
@@ -219,7 +217,8 @@ export default function AgentParcelsScreen() {
                 <Text style={styles.messageButtonText}>メッセージ</Text>
               </TouchableOpacity>
             </Card>
-          )}
+            );
+          }}
           ListEmptyComponent={
             <View style={styles.center}>
               <Ionicons name="checkmark-circle-outline" size={48} color="#9CA3AF" />
@@ -276,8 +275,6 @@ const styles = StyleSheet.create({
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   cardTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 },
   cardTitle: { fontSize: 15, fontWeight: '700', color: '#111827', flex: 1 },
-  statusBadge: { backgroundColor: '#D1FAE5', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 },
-  statusText: { fontSize: 12, fontWeight: '600', color: colors.green },
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   metaText: { fontSize: 13, color: '#6B7280' },
   actionRow: { flexDirection: 'row', gap: 8 },

@@ -16,6 +16,7 @@ import { fetchParcel } from '../../../features/parcels';
 import { createReview, fetchReviewForParcel, type AgentReview } from '../../../features/reviews';
 import { colors, spacing, radius } from '../../../lib/theme';
 import { PrimaryButton, Card, InfoRow } from '../../../components/ui';
+import { CompletionModal } from '../../../components/CompletionModal';
 
 type Result = {
   trackingNo: string;
@@ -28,6 +29,8 @@ export default function DeliveryCompleteScreen() {
   const { parcelId } = useLocalSearchParams<{ parcelId: string }>();
   const [result, setResult] = useState<Result | null>(null);
   const [loading, setLoading] = useState(true);
+  // 完了演出モーダル。結果取得後に自動表示し、閉じるとホームへ戻る。
+  const [showCelebration, setShowCelebration] = useState(false);
 
   // 評価フォーム状態。existingReview が非null なら投稿済み表示に切り替える。
   const [existingReview, setExistingReview] = useState<AgentReview | null>(null);
@@ -60,6 +63,7 @@ export default function DeliveryCompleteScreen() {
         setExistingReview(null);
       } finally {
         setLoading(false);
+        setShowCelebration(true);
       }
     };
 
@@ -211,6 +215,15 @@ export default function DeliveryCompleteScreen() {
           style={styles.primaryButton}
         />
       </ScrollView>
+
+      <CompletionModal
+        visible={showCelebration}
+        onClose={() => {
+          setShowCelebration(false);
+          router.replace('/(app)/');
+        }}
+        co2Saved={result?.co2Saved ?? 0}
+      />
     </SafeAreaView>
   );
 }

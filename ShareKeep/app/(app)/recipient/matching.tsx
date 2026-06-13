@@ -13,16 +13,17 @@ import { ScreenHeader, Card, PrimaryButton } from '../../../components/ui';
 import { type RecommendedAgent } from '../../../features/recommend';
 import { useMatchingLogic } from './useMatchingLogic';
 import { LoadingDots } from './LoadingDots';
+// 機能④⑤: スコア内訳バーへの集約とプライバシー段階開示の表示ユーティリティ（AgentCard で使用）。
+import { factorsFromBreakdown, type ScoreFactors } from '../../../lib/scoring';
+import { discloseAddress } from '../../../lib/geo';
 
-// スコア内訳バーの表示順とラベル。breakdown のキーはモデル次第で増減するが、
-// 既知キーをこの順で表示し、未知キーは無視する（recommendation-api.md §4 の特徴量に対応）。
-const BREAKDOWN_LABELS: { key: string; label: string }[] = [
-  { key: 'distance_score', label: '近さ' },
-  { key: 'time_score', label: '受取時間' },
-  { key: 'day_match', label: '曜日' },
-  { key: 'experience', label: '実績' },
-  { key: 'level_score', label: '信頼度' },
-  { key: 'capacity_score', label: '余裕' },
+// 因子バーの表示定義。feature-ideas.md「スコア関数の定義」の 3 因子（時間帯 T / 距離 D / 実績 R）に対応。
+// recommendation-api の breakdown（多数の特徴量）は factorsFromBreakdown でこの 3 因子に集約する。
+// 断定表現は禁止（「対応しやすい」等の柔らかい表現に統一）。
+const FACTOR_BARS: { key: keyof ScoreFactors; label: string }[] = [
+  { key: 'distance', label: '近さ' },
+  { key: 'availability', label: '対応しやすい時間帯' },
+  { key: 'reliability', label: '実績' },
 ];
 
 export default function MatchingScreen() {
@@ -136,7 +137,7 @@ function WaitingView({
   );
 }
 
-// 候補1件のカード。スコア順・選択状態・内訳バー・理由を表示。
+// 候補1件のカード。総合スコア・選択状態・3 因子バー（距離/対応時間/実績）・理由を表示。
 function AgentCard({
   agent,
   selected,
@@ -151,6 +152,21 @@ function AgentCard({
       ? `${(agent.distance_meters / 1000).toFixed(1)}km`
       : `${Math.round(agent.distance_meters)}m`;
 
+  // breakdown（特徴量名→0–1）を 3 因子に集約してバー表示（lib/scoring.ts と同じ語彙）。
+  const factors = factorsFromBreakdown(agent.breakdown);
+  // 総合スコアは推薦サービスの score（0–1 の確率）を 0–100 点に換算して表示。
+  // ※ score をそのまま丸めると 0.87 が「1点」になる不具合になるため必ず ×100 する。
+  const totalScore = Math.round(Math.max(0, Math.min(100, agent.score * 100)));
+
+  // プライバシー段階開示（確定前）。候補一覧では詳細住所は出さず概略のみ。
+  // RecommendedAgent は住所を持たないため roundedLabel は距離ベースの概略にする。
+  // k-匿名性は保証しない（lib/geo.ts のコメント参照）。確定後は詳細を別画面で開示。
+  const areaLabel = discloseAddress({
+    stage: 'before',
+    detailAddress: null,
+    roundedLabel: `${distanceLabel} ほど先のエリア`,
+  });
+
   return (
     <TouchableOpacity activeOpacity={0.8} onPress={onSelect}>
       <Card style={[styles.agentCard, selected && styles.agentCardSelected]}>
@@ -161,9 +177,13 @@ function AgentCard({
           <View style={styles.agentNameWrap}>
             <Text style={styles.agentName}>{agent.full_name ?? '代理人'}</Text>
             <View style={styles.agentMetaRow}>
-              <Ionicons name="walk-outline" size={13} color={colors.gray} />
-              <Text style={styles.agentMeta}>{distanceLabel}</Text>
+              <Ionicons name="location-outline" size={13} color={colors.gray} />
+              <Text style={styles.agentMeta}>{areaLabel}</Text>
             </View>
+          </View>
+          <View style={styles.scoreWrap}>
+            <Text style={styles.scoreValue}>{totalScore}</Text>
+            <Text style={styles.scoreUnit}>点</Text>
           </View>
           <Ionicons
             name={selected ? 'checkmark-circle' : 'ellipse-outline'}
@@ -172,10 +192,10 @@ function AgentCard({
           />
         </View>
 
-        {/* スコア内訳バー */}
+        {/* スコア内訳（3 因子の横バー）。断定せず「対応しやすさ」の目安として表示。 */}
         <View style={styles.breakdown}>
-          {BREAKDOWN_LABELS.filter(({ key }) => agent.breakdown[key] != null).map(({ key, label }) => {
-            const value = Math.max(0, Math.min(1, agent.breakdown[key]));
+          {FACTOR_BARS.map(({ key, label }) => {
+            const value = Math.max(0, Math.min(1, factors[key]));
             return (
               <View key={key} style={styles.barRow}>
                 <Text style={styles.barLabel}>{label}</Text>
@@ -226,6 +246,9 @@ const styles = StyleSheet.create({
   agentName: { fontSize: 16, fontWeight: '700', color: colors.ink },
   agentMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   agentMeta: { fontSize: 13, color: colors.gray },
+  scoreWrap: { flexDirection: 'row', alignItems: 'baseline', gap: 1 },
+  scoreValue: { fontSize: 20, fontWeight: '800', color: colors.green },
+  scoreUnit: { fontSize: 12, color: colors.gray },
   breakdown: { gap: 6 },
   barRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   barLabel: { fontSize: 12, color: colors.gray, width: 56 },

@@ -5,6 +5,7 @@ import { router, useFocusEffect } from 'expo-router';
 import TreeScene from '../../components/TreeScene';
 import { colors } from '../../lib/theme';
 import { Card } from '../../components/ui';
+import { RegionalContributionCard } from '../../components/RegionalContributionCard';
 import { getMyRole } from '../../features/auth';
 import { supabase } from '../../lib/supabase';
 import { getUnreadNotificationCount, subscribeNotifications } from '../../features/notifications';
@@ -179,6 +180,11 @@ export default function HomeScreen() {
         </TouchableOpacity>
       </View>
 
+      {/* 地域貢献カード（機能③・全体集計） */}
+      <View style={styles.regionalWrap}>
+        <RegionalContributionCard />
+      </View>
+
       {/* モード別コンテンツ（後続タスクで各画面へ遷移） */}
       <View style={styles.modeContent}>
         {mode === 'recipient' ? (
@@ -313,6 +319,10 @@ const styles = StyleSheet.create({
   },
   tabTextActive: {
     color: '#FFFFFF',
+  },
+  regionalWrap: {
+    paddingHorizontal: 16,
+    paddingBottom: 12,
   },
   modeContent: {
     paddingHorizontal: 16,
