@@ -209,7 +209,7 @@ curl -s localhost:8000/health
 | アプリで推薦カードが出ず常に自動マッチ | `EXPO_PUBLIC_RECOMMENDATION_URL` 到達性、`/health` 200、再起動したか |
 | `/recommend` が 401 | 本番は正しい挙動（JWT必須）。curl確認時は一時的に `RECOMMENDATION_REQUIRE_AUTH=false` |
 | `/recommend` が 404（parcel not found） | 認証ユーザと parcel.recipient_id 不一致。自分の荷物で試す |
-| `/recommend` が 502 / 500 | migration 未適用 / 代理人 seed なし / `SUPABASE_URL`・`SERVICE_ROLE_KEY`・`ANON_KEY` 不正（`/health` は200でも `/recommend` で初めてDB接続するため）|
+| `/recommend` が 502 / 500 | migration 未適用 / 代理人 seed なし / `SUPABASE_URL`・`SUPABASE_SERVICE_ROLE_KEY`・`SUPABASE_ANON_KEY` 不正（`/health` は200でも `/recommend` で初めてDB接続するため。`/ready` で事前検知可）|
 | `/retrain` が 503 | `ADMIN_API_KEY` 未設定。設定し `X-Admin-Key` ヘッダで叩く |
 | Pod が `CreateContainerConfigError` | 参照する Secret/ConfigMap が未作成。`kubectl apply` 順（configmap→secret→deployment）を確認 |
 | Pod は Running だが `/recommend` がエラー | `kubectl logs` で env 値（service_role/anon）を確認 |

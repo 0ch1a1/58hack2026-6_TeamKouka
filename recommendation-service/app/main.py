@@ -58,7 +58,9 @@ def get_authenticated_user_id(
 
 def require_admin(x_admin_key: str | None = Header(default=None, alias="X-Admin-Key")) -> None:
     """/retrain を管理者キーで保護する。"""
-    if not settings.admin_api_key:
+    # 未設定、またはテンプレの REPLACE_WITH_* が残ったままなら「未設定」として無効化。
+    # （公知のプレースホルダ値で /retrain が保護されてしまうのを防ぐ）
+    if _placeholder(settings.admin_api_key):
         raise HTTPException(
             status_code=503, detail="Retraining is disabled (ADMIN_API_KEY not configured)"
         )
