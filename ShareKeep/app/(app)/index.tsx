@@ -3,6 +3,8 @@ import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView } from 'react-na
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import TreeScene from '../../components/TreeScene';
+import { colors } from '../../lib/theme';
+import { Card } from '../../components/ui';
 
 type Mode = 'recipient' | 'agent';
 
@@ -30,7 +32,7 @@ export default function HomeScreen() {
       {/* ヘッダー */}
       <View style={styles.header}>
         <View style={styles.appNameRow}>
-          <Ionicons name="leaf" size={22} color="#1A7A4C" />
+          <Ionicons name="leaf" size={22} color={colors.green} />
           <Text style={styles.appName}> ShareKeep</Text>
         </View>
         <View style={styles.statsRow}>
@@ -55,7 +57,7 @@ export default function HomeScreen() {
           onPress={() => setMode('recipient')}
         >
           <View style={styles.tabInner}>
-            <Ionicons name="cube-outline" size={16} color={mode === 'recipient' ? '#FFFFFF' : '#1A7A4C'} />
+            <Ionicons name="cube-outline" size={16} color={mode === 'recipient' ? '#FFFFFF' : colors.green} />
             <Text style={[styles.tabText, mode === 'recipient' && styles.tabTextActive]}> 受取モード</Text>
           </View>
         </TouchableOpacity>
@@ -64,7 +66,7 @@ export default function HomeScreen() {
           onPress={() => setMode('agent')}
         >
           <View style={styles.tabInner}>
-            <Ionicons name="home-outline" size={16} color={mode === 'agent' ? '#FFFFFF' : '#1A7A4C'} />
+            <Ionicons name="home-outline" size={16} color={mode === 'agent' ? '#FFFFFF' : colors.green} />
             <Text style={[styles.tabText, mode === 'agent' && styles.tabTextActive]}> 代理モード</Text>
           </View>
         </TouchableOpacity>
@@ -84,7 +86,7 @@ export default function HomeScreen() {
 
 function RecipientContent() {
   return (
-    <View style={styles.contentCard}>
+    <Card style={styles.contentCard}>
       <Text style={styles.contentTitle}>荷物を受け取る</Text>
       <Text style={styles.contentDesc}>
         不在時の荷物を近所の代理人に一時保管してもらえます。
@@ -95,13 +97,13 @@ function RecipientContent() {
       >
         <Text style={styles.actionButtonText}>荷物一覧を見る</Text>
       </TouchableOpacity>
-    </View>
+    </Card>
   );
 }
 
 function AgentContent() {
   return (
-    <View style={styles.contentCard}>
+    <Card style={styles.contentCard}>
       <Text style={styles.contentTitle}>代理人として活動する</Text>
       <Text style={styles.contentDesc}>
         近所の荷物を預かってCO2削減に貢献しましょう。
@@ -118,18 +120,14 @@ function AgentContent() {
       >
         <Text style={styles.actionButtonText}>受取対応を確認する</Text>
       </TouchableOpacity>
-    </View>
+    </Card>
   );
 }
-
-const GREEN = '#1A7A4C';
-const GREEN_LIGHT = '#D1FAE5';
-const BG = '#F0FAF4';
 
 const styles = StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: BG,
+    backgroundColor: colors.bg,
   },
   header: {
     flexDirection: 'row',
@@ -146,7 +144,7 @@ const styles = StyleSheet.create({
   appName: {
     fontSize: 20,
     fontWeight: '800',
-    color: GREEN,
+    color: colors.green,
   },
   tabInner: {
     flexDirection: 'row',
@@ -160,7 +158,7 @@ const styles = StyleSheet.create({
   statText: {
     fontSize: 13,
     fontWeight: '600',
-    color: GREEN,
+    color: colors.green,
   },
   statDivider: {
     color: '#A7F3D0',
@@ -169,7 +167,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontSize: 14,
     fontWeight: '600',
-    color: GREEN,
+    color: colors.green,
     marginTop: 4,
     letterSpacing: 1,
   },
@@ -178,13 +176,13 @@ const styles = StyleSheet.create({
     marginHorizontal: 16,
     borderRadius: 20,
     overflow: 'hidden',
-    backgroundColor: '#E8F5E9',
+    backgroundColor: colors.greenPale,
   },
   tabBar: {
     flexDirection: 'row',
     marginHorizontal: 16,
     marginVertical: 12,
-    backgroundColor: GREEN_LIGHT,
+    backgroundColor: colors.greenLight,
     borderRadius: 14,
     padding: 4,
   },
@@ -195,12 +193,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   tabActive: {
-    backgroundColor: GREEN,
+    backgroundColor: colors.green,
   },
   tabText: {
     fontSize: 14,
     fontWeight: '600',
-    color: GREEN,
+    color: colors.green,
   },
   tabTextActive: {
     color: '#FFFFFF',
@@ -210,15 +208,8 @@ const styles = StyleSheet.create({
     paddingBottom: 16,
   },
   contentCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
     padding: 20,
     gap: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 2,
   },
   contentTitle: {
     fontSize: 16,
@@ -232,7 +223,7 @@ const styles = StyleSheet.create({
   },
   actionButton: {
     marginTop: 8,
-    backgroundColor: GREEN,
+    backgroundColor: colors.green,
     borderRadius: 10,
     paddingVertical: 12,
     alignItems: 'center',
