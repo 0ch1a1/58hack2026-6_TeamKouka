@@ -254,6 +254,19 @@ function PackageCard({ pkg }: { pkg: Package }) {
           <Text style={styles.agentText}>代理人: {pkg.agentName}</Text>
         </View>
       )}
+
+      {/* 機能9: 追記専用監査ログの検証画面への導線 */}
+      <TouchableOpacity
+        style={styles.auditLogRow}
+        onPress={() =>
+          router.push({ pathname: '/(app)/recipient/audit-log', params: { parcelId: pkg.id } })
+        }
+        activeOpacity={0.7}
+      >
+        <Ionicons name="shield-checkmark-outline" size={14} color={colors.green} />
+        <Text style={styles.auditLogText}>監査ログを検証</Text>
+        <Ionicons name="chevron-forward" size={14} color={colors.grayLight} />
+      </TouchableOpacity>
     </TouchableOpacity>
   );
 }
@@ -277,6 +290,8 @@ const styles = StyleSheet.create({
   metaText: { fontSize: 13, color: colors.gray },
   agentRow: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: colors.greenLight, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, alignSelf: 'flex-start' },
   agentText: { fontSize: 13, fontWeight: '600', color: colors.green },
+  auditLogRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4, paddingTop: 8, borderTopWidth: 1, borderTopColor: colors.border },
+  auditLogText: { flex: 1, fontSize: 13, fontWeight: '600', color: colors.green },
   emptyContainer: { alignItems: 'center', paddingTop: 60, gap: 12 },
   emptyText: { fontSize: 15, color: colors.grayLight },
   fab: { position: 'absolute', bottom: 32, left: 0, right: 0, alignItems: 'center' },
