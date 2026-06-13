@@ -15,9 +15,8 @@ import { router } from 'expo-router';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import QRCode from 'react-native-qrcode-svg';
 import { supabase } from '../../../lib/supabase';
-
-const GREEN = '#1A7A4C';
-const BG = '#F0FAF4';
+import { colors } from '../../../lib/theme';
+import { ScreenHeader, Card } from '../../../components/ui';
 
 type MatchedParcel = {
   matchId: string;
@@ -148,17 +147,11 @@ export default function AgentParcelsScreen() {
 
   return (
     <SafeAreaView style={styles.safe}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name="chevron-back" size={24} color={GREEN} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>請負リスト</Text>
-        <View style={styles.headerRight} />
-      </View>
+      <ScreenHeader title="請負リスト" />
 
       {loading ? (
         <View style={styles.center}>
-          <ActivityIndicator size="large" color={GREEN} />
+          <ActivityIndicator size="large" color={colors.green} />
         </View>
       ) : (
         <FlatList
@@ -166,10 +159,10 @@ export default function AgentParcelsScreen() {
           keyExtractor={item => item.matchId}
           contentContainerStyle={styles.listContent}
           renderItem={({ item }) => (
-            <View style={styles.card}>
+            <Card>
               <View style={styles.cardHeader}>
                 <View style={styles.cardTitleRow}>
-                  <Ionicons name="cube-outline" size={16} color={GREEN} />
+                  <Ionicons name="cube-outline" size={16} color={colors.green} />
                   <Text style={styles.cardTitle}>{item.trackingNo}</Text>
                 </View>
                 <View style={styles.statusBadge}>
@@ -184,7 +177,7 @@ export default function AgentParcelsScreen() {
 
               <View style={styles.actionRow}>
                 <TouchableOpacity style={styles.qrButton} onPress={() => handleShowQR(item)}>
-                  <Ionicons name="qr-code-outline" size={16} color={GREEN} />
+                  <Ionicons name="qr-code-outline" size={16} color={colors.green} />
                   <Text style={styles.qrButtonText}>配達員用QR</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.scanButton} onPress={() => handleOpenScanner(item)}>
@@ -192,7 +185,7 @@ export default function AgentParcelsScreen() {
                   <Text style={styles.scanButtonText}>受取人QRスキャン</Text>
                 </TouchableOpacity>
               </View>
-            </View>
+            </Card>
           )}
           ListEmptyComponent={
             <View style={styles.center}>
@@ -244,25 +237,20 @@ export default function AgentParcelsScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: BG },
+  safe: { flex: 1, backgroundColor: colors.bg },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12, paddingTop: 60 },
-  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8 },
-  backButton: { width: 36, height: 36, justifyContent: 'center' },
-  headerTitle: { flex: 1, textAlign: 'center', fontSize: 18, fontWeight: '700', color: '#111827' },
-  headerRight: { width: 36 },
   listContent: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 40, gap: 12 },
-  card: { backgroundColor: '#FFFFFF', borderRadius: 16, padding: 16, gap: 12, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 8, elevation: 2 },
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   cardTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 },
   cardTitle: { fontSize: 15, fontWeight: '700', color: '#111827', flex: 1 },
   statusBadge: { backgroundColor: '#D1FAE5', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 },
-  statusText: { fontSize: 12, fontWeight: '600', color: GREEN },
+  statusText: { fontSize: 12, fontWeight: '600', color: colors.green },
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   metaText: { fontSize: 13, color: '#6B7280' },
   actionRow: { flexDirection: 'row', gap: 8 },
-  qrButton: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 10, borderRadius: 10, borderWidth: 1.5, borderColor: GREEN },
-  qrButtonText: { fontSize: 13, fontWeight: '600', color: GREEN },
-  scanButton: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 10, borderRadius: 10, backgroundColor: GREEN },
+  qrButton: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 10, borderRadius: 10, borderWidth: 1.5, borderColor: colors.green },
+  qrButtonText: { fontSize: 13, fontWeight: '600', color: colors.green },
+  scanButton: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 10, borderRadius: 10, backgroundColor: colors.green },
   scanButtonText: { fontSize: 13, fontWeight: '600', color: '#FFFFFF' },
   emptyText: { fontSize: 15, color: '#9CA3AF' },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', alignItems: 'center', justifyContent: 'center' },
@@ -276,7 +264,7 @@ const styles = StyleSheet.create({
   camera: { flex: 1 },
   scanOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center', gap: 24 },
   scanText: { color: '#FFFFFF', fontSize: 16, fontWeight: '600', backgroundColor: 'rgba(0,0,0,0.5)', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8 },
-  scanFrame: { width: 240, height: 240, borderWidth: 2, borderColor: GREEN, borderRadius: 12 },
+  scanFrame: { width: 240, height: 240, borderWidth: 2, borderColor: colors.green, borderRadius: 12 },
   cancelScan: { position: 'absolute', bottom: 48, left: 0, right: 0, alignItems: 'center' },
   cancelScanText: { color: '#FFFFFF', fontSize: 16, fontWeight: '600', backgroundColor: 'rgba(0,0,0,0.5)', paddingHorizontal: 24, paddingVertical: 12, borderRadius: 20 },
 });

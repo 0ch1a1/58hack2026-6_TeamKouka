@@ -9,11 +9,12 @@ import {
   Platform,
   ScrollView,
   Alert,
-  ActivityIndicator,
 } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
+import { colors } from '../../lib/theme';
+import { PrimaryButton } from '../../components/ui';
 
 export default function SignInDriverScreen() {
   const [email, setEmail] = useState('');
@@ -42,12 +43,12 @@ export default function SignInDriverScreen() {
     >
       <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
         <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-          <Ionicons name="chevron-back" size={20} color="#1A7A4C" />
+          <Ionicons name="chevron-back" size={20} color={colors.green} />
           <Text style={styles.backText}>戻る</Text>
         </TouchableOpacity>
 
         <View style={styles.logoRow}>
-          <Ionicons name="leaf" size={32} color="#1A7A4C" />
+          <Ionicons name="leaf" size={32} color={colors.green} />
           <Text style={styles.logo}> ShareKeep</Text>
         </View>
         <Text style={styles.subtitle}>配達員ログイン</Text>
@@ -55,7 +56,7 @@ export default function SignInDriverScreen() {
         <TextInput
           style={styles.input}
           placeholder="メールアドレス"
-          placeholderTextColor="#9CA3AF"
+          placeholderTextColor={colors.grayLight}
           value={email}
           onChangeText={setEmail}
           autoCapitalize="none"
@@ -64,19 +65,18 @@ export default function SignInDriverScreen() {
         <TextInput
           style={styles.input}
           placeholder="パスワード"
-          placeholderTextColor="#9CA3AF"
+          placeholderTextColor={colors.grayLight}
           value={password}
           onChangeText={setPassword}
           secureTextEntry
         />
 
-        <TouchableOpacity style={styles.primaryButton} onPress={handleSignIn} disabled={loading}>
-          {loading ? (
-            <ActivityIndicator color="#FFFFFF" />
-          ) : (
-            <Text style={styles.primaryButtonText}>ログイン</Text>
-          )}
-        </TouchableOpacity>
+        <PrimaryButton
+          label="ログイン"
+          onPress={handleSignIn}
+          loading={loading}
+          style={{ height: 52, width: '100%', marginTop: 8, backgroundColor: colors.driver, borderRadius: 12 }}
+        />
 
         <View style={styles.footer}>
           <Text style={styles.footerText}>アカウントをお持ちでない方は</Text>
@@ -90,7 +90,7 @@ export default function SignInDriverScreen() {
 }
 
 const styles = StyleSheet.create({
-  flex: { flex: 1, backgroundColor: '#F0FAF4' },
+  flex: { flex: 1, backgroundColor: colors.bg },
   container: {
     flexGrow: 1,
     alignItems: 'center',
@@ -105,33 +105,23 @@ const styles = StyleSheet.create({
     marginBottom: 24,
     gap: 2,
   },
-  backText: { fontSize: 14, color: '#1A7A4C', fontWeight: '600' },
+  backText: { fontSize: 14, color: colors.green, fontWeight: '600' },
   logoRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
-  logo: { fontSize: 36, fontWeight: '800', color: '#1A7A4C' },
-  subtitle: { fontSize: 16, fontWeight: '600', color: '#6B7280', marginBottom: 40 },
+  logo: { fontSize: 36, fontWeight: '800', color: colors.green },
+  subtitle: { fontSize: 16, fontWeight: '600', color: colors.gray, marginBottom: 40 },
   input: {
     width: '100%',
     height: 52,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.white,
     borderRadius: 12,
     paddingHorizontal: 16,
     fontSize: 16,
-    color: '#111827',
+    color: colors.ink,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: '#D1FAE5',
+    borderColor: colors.border,
   },
-  primaryButton: {
-    width: '100%',
-    height: 52,
-    backgroundColor: '#4B5563',
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 8,
-  },
-  primaryButtonText: { color: '#FFFFFF', fontSize: 16, fontWeight: '700' },
   footer: { flexDirection: 'row', alignItems: 'center', marginTop: 24, gap: 4 },
-  footerText: { fontSize: 14, color: '#6B7280' },
-  linkText: { fontSize: 14, fontWeight: '600', color: '#1A7A4C' },
+  footerText: { fontSize: 14, color: colors.gray },
+  linkText: { fontSize: 14, fontWeight: '600', color: colors.green },
 });

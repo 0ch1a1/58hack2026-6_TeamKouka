@@ -5,14 +5,12 @@ import {
   StyleSheet,
   SafeAreaView,
   Animated,
-  TouchableOpacity,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { supabase } from '../../../lib/supabase';
-
-const GREEN = '#1A7A4C';
-const BG = '#F0FAF4';
+import { colors } from '../../../lib/theme';
+import { ScreenHeader, Card } from '../../../components/ui';
 
 export default function MatchingScreen() {
   const { parcelId, trackingNumber } = useLocalSearchParams<{
@@ -72,17 +70,11 @@ export default function MatchingScreen() {
 
   return (
     <SafeAreaView style={styles.safe}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name="chevron-back" size={24} color={GREEN} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>マッチング中</Text>
-        <View style={styles.headerRight} />
-      </View>
+      <ScreenHeader title="マッチング中" />
 
       <View style={styles.body}>
         <View style={styles.iconWrap}>
-          <Ionicons name="people-outline" size={64} color={GREEN} />
+          <Ionicons name="people-outline" size={64} color={colors.green} />
         </View>
 
         <Text style={styles.title}>代理人を手配しています</Text>
@@ -96,13 +88,13 @@ export default function MatchingScreen() {
           <Animated.View style={[styles.dot, dotStyle(dot3)]} />
         </View>
 
-        <View style={styles.card}>
+        <Card style={styles.card}>
           <View style={styles.cardRow}>
-            <Ionicons name="barcode-outline" size={16} color={GREEN} />
+            <Ionicons name="barcode-outline" size={16} color={colors.green} />
             <Text style={styles.cardLabel}>追跡番号</Text>
             <Text style={styles.cardValue}>{trackingNumber ?? '—'}</Text>
           </View>
-        </View>
+        </Card>
 
         <Text style={styles.note}>
           代理人が決まると自動的に次の画面に進みます。{'\n'}このままお待ちいただくか、アプリを閉じても大丈夫です。
@@ -113,20 +105,16 @@ export default function MatchingScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: BG },
-  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8 },
-  backButton: { width: 36, height: 36, justifyContent: 'center' },
-  headerTitle: { flex: 1, textAlign: 'center', fontSize: 18, fontWeight: '700', color: '#111827' },
-  headerRight: { width: 36 },
+  safe: { flex: 1, backgroundColor: colors.bg },
   body: { flex: 1, alignItems: 'center', paddingHorizontal: 24, paddingTop: 48, gap: 20 },
-  iconWrap: { width: 112, height: 112, borderRadius: 56, backgroundColor: '#D1FAE5', alignItems: 'center', justifyContent: 'center' },
-  title: { fontSize: 22, fontWeight: '700', color: '#111827', textAlign: 'center' },
-  desc: { fontSize: 15, color: '#6B7280', textAlign: 'center', lineHeight: 24 },
+  iconWrap: { width: 112, height: 112, borderRadius: 56, backgroundColor: colors.greenLight, alignItems: 'center', justifyContent: 'center' },
+  title: { fontSize: 22, fontWeight: '700', color: colors.ink, textAlign: 'center' },
+  desc: { fontSize: 15, color: colors.gray, textAlign: 'center', lineHeight: 24 },
   dots: { flexDirection: 'row', gap: 10, height: 24, alignItems: 'center' },
-  dot: { width: 10, height: 10, borderRadius: 5, backgroundColor: GREEN },
-  card: { width: '100%', backgroundColor: '#FFFFFF', borderRadius: 16, padding: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 8, elevation: 2 },
+  dot: { width: 10, height: 10, borderRadius: 5, backgroundColor: colors.green },
+  card: { width: '100%', gap: 0 },
   cardRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  cardLabel: { fontSize: 13, color: '#6B7280', width: 72 },
-  cardValue: { flex: 1, fontSize: 14, fontWeight: '600', color: '#111827' },
-  note: { fontSize: 13, color: '#9CA3AF', textAlign: 'center', lineHeight: 20 },
+  cardLabel: { fontSize: 13, color: colors.gray, width: 72 },
+  cardValue: { flex: 1, fontSize: 14, fontWeight: '600', color: colors.ink },
+  note: { fontSize: 13, color: colors.grayLight, textAlign: 'center', lineHeight: 20 },
 });

@@ -10,12 +10,10 @@ import {
   Alert,
   ActivityIndicator,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { supabase } from '../../../lib/supabase';
-
-const GREEN = '#1A7A4C';
-const BG = '#F0FAF4';
+import { colors } from '../../../lib/theme';
+import { ScreenHeader, PrimaryButton, Card } from '../../../components/ui';
 
 const DAYS = ['月', '火', '水', '木', '金', '土', '日'] as const;
 type Day = (typeof DAYS)[number];
@@ -111,7 +109,7 @@ export default function AgentProfileScreen() {
     return (
       <SafeAreaView style={styles.safe}>
         <View style={styles.center}>
-          <ActivityIndicator size="large" color={GREEN} />
+          <ActivityIndicator size="large" color={colors.green} />
         </View>
       </SafeAreaView>
     );
@@ -119,16 +117,10 @@ export default function AgentProfileScreen() {
 
   return (
     <SafeAreaView style={styles.safe}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name="chevron-back" size={24} color={GREEN} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>代理人プロファイル</Text>
-        <View style={styles.headerRight} />
-      </View>
+      <ScreenHeader title="代理人プロファイル" />
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        <View style={styles.section}>
+        <Card>
           <Text style={styles.sectionTitle}>受取場所</Text>
 
           <View style={styles.field}>
@@ -169,9 +161,9 @@ export default function AgentProfileScreen() {
               onChangeText={setRoomNumber}
             />
           </View>
-        </View>
+        </Card>
 
-        <View style={styles.section}>
+        <Card>
           <Text style={styles.sectionTitle}>
             受取可能日時 <Text style={styles.required}>*</Text>
           </Text>
@@ -213,9 +205,9 @@ export default function AgentProfileScreen() {
               maxLength={5}
             />
           </View>
-        </View>
+        </Card>
 
-        <View style={styles.section}>
+        <Card>
           <Text style={styles.sectionTitle}>緊急連絡先（任意）</Text>
           <View style={styles.field}>
             <Text style={styles.label}>電話番号</Text>
@@ -228,32 +220,24 @@ export default function AgentProfileScreen() {
               keyboardType="phone-pad"
             />
           </View>
-        </View>
+        </Card>
 
-        <TouchableOpacity style={styles.saveButton} onPress={handleSave} disabled={saving}>
-          {saving ? (
-            <ActivityIndicator color="#FFFFFF" />
-          ) : (
-            <>
-              <Ionicons name="checkmark-circle-outline" size={20} color="#FFFFFF" />
-              <Text style={styles.saveButtonText}>保存する</Text>
-            </>
-          )}
-        </TouchableOpacity>
+        <PrimaryButton
+          label="保存する"
+          icon="checkmark-circle-outline"
+          loading={saving}
+          onPress={handleSave}
+          style={{ marginTop: 8 }}
+        />
       </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: BG },
+  safe: { flex: 1, backgroundColor: colors.bg },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8 },
-  backButton: { width: 36, height: 36, justifyContent: 'center' },
-  headerTitle: { flex: 1, textAlign: 'center', fontSize: 18, fontWeight: '700', color: '#111827' },
-  headerRight: { width: 36 },
   scroll: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 40, gap: 16 },
-  section: { backgroundColor: '#FFFFFF', borderRadius: 16, padding: 16, gap: 12, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 8, elevation: 2 },
   sectionTitle: { fontSize: 13, fontWeight: '600', color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: 0.5 },
   field: { gap: 6 },
   label: { fontSize: 14, fontWeight: '600', color: '#374151' },
@@ -261,12 +245,10 @@ const styles = StyleSheet.create({
   input: { backgroundColor: '#F9FAFB', borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, color: '#111827' },
   daysRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
   dayChip: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#F3F4F6', alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: '#E5E7EB' },
-  dayChipActive: { backgroundColor: GREEN, borderColor: GREEN },
+  dayChipActive: { backgroundColor: colors.green, borderColor: colors.green },
   dayChipText: { fontSize: 14, fontWeight: '600', color: '#6B7280' },
   dayChipTextActive: { color: '#FFFFFF' },
   timeRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   timeInput: { flex: 1, textAlign: 'center' },
   timeSeparator: { fontSize: 16, color: '#6B7280', fontWeight: '600' },
-  saveButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: GREEN, borderRadius: 14, paddingVertical: 16, marginTop: 8 },
-  saveButtonText: { fontSize: 16, fontWeight: '700', color: '#FFFFFF' },
 });
