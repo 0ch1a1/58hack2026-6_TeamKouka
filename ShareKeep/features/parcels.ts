@@ -389,6 +389,10 @@ export async function getAgentLocations() {
     end_time: string | null
     level: number
     completed_deliveries: number
+    // 評価機能（F-REVIEW-01）。RPC 側は migration 20260613150100 で対応。
+    // 評価0件の代理人は avg_rating が null。一覧で集約し N+1 を避ける。
+    avg_rating: number | null
+    review_count: number
   }>
 }
 

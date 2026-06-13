@@ -6,11 +6,15 @@ import {
   SafeAreaView,
   ScrollView,
   ActivityIndicator,
+  TextInput,
+  TouchableOpacity,
+  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { fetchParcel } from '../../../features/parcels';
-import { colors } from '../../../lib/theme';
+import { createReview, fetchReviewForParcel, type AgentReview } from '../../../features/reviews';
+import { colors, spacing, radius } from '../../../lib/theme';
 import { PrimaryButton, Card, InfoRow } from '../../../components/ui';
 
 type Result = {
@@ -18,10 +22,18 @@ type Result = {
   co2Saved: number;
 };
 
+const MAX_RATING = 5;
+
 export default function DeliveryCompleteScreen() {
   const { parcelId } = useLocalSearchParams<{ parcelId: string }>();
   const [result, setResult] = useState<Result | null>(null);
   const [loading, setLoading] = useState(true);
+
+  // 評価フォーム状態。existingReview が非null なら投稿済み表示に切り替える。
+  const [existingReview, setExistingReview] = useState<AgentReview | null>(null);
+  const [rating, setRating] = useState(0);
+  const [comment, setComment] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     if (!parcelId) { setLoading(false); return; }
@@ -38,6 +50,14 @@ export default function DeliveryCompleteScreen() {
       } catch {
         // 取得失敗時も結果画面はデフォルト表示で継続（既存UXを維持）
         setResult({ trackingNo: '—', co2Saved: 0 });
+      }
+
+      // 評価の投稿済み確認は CO2 表示とは独立。失敗してもフォームは出す（未投稿扱い）。
+      try {
+        const review = await fetchReviewForParcel(parcelId);
+        setExistingReview(review);
+      } catch {
+        setExistingReview(null);
       } finally {
         setLoading(false);
       }
@@ -45,6 +65,27 @@ export default function DeliveryCompleteScreen() {
 
     fetchData();
   }, [parcelId]);
+
+  const handleSubmit = async () => {
+    if (!parcelId) return;
+    if (rating < 1) {
+      Alert.alert('評価を選択してください', '星を1つ以上選んでください。');
+      return;
+    }
+    try {
+      setSubmitting(true);
+      const review = await createReview({
+        parcelId,
+        rating,
+        comment: comment.trim() || null,
+      });
+      setExistingReview(review);
+    } catch {
+      Alert.alert('エラー', '評価の送信に失敗しました。もう一度お試しください。');
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -83,6 +124,72 @@ export default function DeliveryCompleteScreen() {
           <InfoRow label="追跡番号" value={result?.trackingNo ?? '—'} />
         </Card>
 
+        {/* 評価フォーム。投稿済みなら「評価済み」を表示、未投稿なら星＋コメントで送信。 */}
+        <Card>
+          <Text style={styles.cardSectionTitle}>代理人の評価</Text>
+          {existingReview ? (
+            <View style={styles.reviewedWrap}>
+              <View style={styles.starsRow}>
+                {Array.from({ length: MAX_RATING }, (_, i) => (
+                  <Ionicons
+                    key={i}
+                    name={i < existingReview.rating ? 'star' : 'star-outline'}
+                    size={28}
+                    color={colors.green}
+                  />
+                ))}
+              </View>
+              {existingReview.comment ? (
+                <Text style={styles.reviewedComment}>{existingReview.comment}</Text>
+              ) : null}
+              <View style={styles.reviewedBadge}>
+                <Ionicons name="checkmark-circle" size={16} color={colors.green} />
+                <Text style={styles.reviewedBadgeText}>評価済み</Text>
+              </View>
+            </View>
+          ) : (
+            <View style={styles.formWrap}>
+              <Text style={styles.formHint}>代理人の対応はいかがでしたか？</Text>
+              <View style={styles.starsRow}>
+                {Array.from({ length: MAX_RATING }, (_, i) => {
+                  const value = i + 1;
+                  return (
+                    <TouchableOpacity
+                      key={value}
+                      onPress={() => setRating(value)}
+                      disabled={submitting}
+                      accessibilityRole="button"
+                      accessibilityLabel={`星${value}`}
+                    >
+                      <Ionicons
+                        name={value <= rating ? 'star' : 'star-outline'}
+                        size={36}
+                        color={value <= rating ? colors.green : colors.grayLight}
+                      />
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+              <TextInput
+                style={styles.commentInput}
+                placeholder="コメント（任意）"
+                placeholderTextColor={colors.grayLight}
+                value={comment}
+                onChangeText={setComment}
+                multiline
+                editable={!submitting}
+              />
+              <PrimaryButton
+                label="評価を送信"
+                icon="send-outline"
+                onPress={handleSubmit}
+                loading={submitting}
+                disabled={rating < 1}
+              />
+            </View>
+          )}
+        </Card>
+
         <PrimaryButton
           label="ホームへ戻る"
           icon="home-outline"
@@ -108,4 +215,24 @@ const styles = StyleSheet.create({
   co2Value: { fontSize: 28, fontWeight: '800', color: colors.green },
   co2Label: { fontSize: 13, color: colors.greenDark },
   primaryButton: { marginTop: 8 },
+  // 評価フォーム
+  formWrap: { gap: spacing.md, marginTop: spacing.sm },
+  formHint: { fontSize: 14, color: colors.ink },
+  starsRow: { flexDirection: 'row', gap: spacing.xs },
+  commentInput: {
+    minHeight: 80,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.button,
+    backgroundColor: colors.fieldBg,
+    padding: spacing.md,
+    fontSize: 14,
+    color: colors.ink,
+    textAlignVertical: 'top',
+  },
+  // 投稿済み表示
+  reviewedWrap: { gap: spacing.sm, marginTop: spacing.sm },
+  reviewedComment: { fontSize: 14, color: colors.ink },
+  reviewedBadge: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
+  reviewedBadgeText: { fontSize: 13, fontWeight: '700', color: colors.green },
 });
