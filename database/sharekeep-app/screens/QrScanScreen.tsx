@@ -9,6 +9,7 @@ import {
   View,
 } from 'react-native'
 import { CameraView, useCameraPermissions } from 'expo-camera'
+import { getErrorMessage } from '../features/auth'
 import { verifyAgentQr, verifyRecipientQr } from '../features/parcels'
 
 type VerifyMode = 'agent' | 'recipient'
@@ -31,7 +32,7 @@ export function QrScanScreen() {
       const result = mode === 'agent' ? await verifyAgentQr(value) : await verifyRecipientQr(value)
       setMessage(JSON.stringify(result, null, 2))
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : String(error))
+      setMessage(getErrorMessage(error))
     } finally {
       setLoading(false)
     }
