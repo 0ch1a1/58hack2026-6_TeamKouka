@@ -16,6 +16,7 @@ import { useLocalSearchParams, router } from 'expo-router';
 // MapView は専用コンポーネントに切り出し、地図が無くてもリストで割り当て可能にする。
 import MapView, { Marker } from 'react-native-maps';
 import { colors, cardShadow, radius, spacing } from '../../../lib/theme';
+import { FALLBACK_LOCATION } from '../../../lib/constants';
 import { ScreenHeader, Card, InfoRow, EmptyState } from '../../../components/ui';
 import { getAgentLocations, assignAgentToParcel } from '../../../features/parcels';
 
@@ -24,8 +25,7 @@ type AgentLocation = Awaited<ReturnType<typeof getAgentLocations>>[number];
 
 // 地図初期表示のフォールバック（東京駅周辺）。代理人が居ない/緯度経度が無い時に使う。
 const FALLBACK_REGION = {
-  latitude: 35.681236,
-  longitude: 139.767125,
+  ...FALLBACK_LOCATION,
   latitudeDelta: 0.08,
   longitudeDelta: 0.08,
 } as const;

@@ -4,6 +4,7 @@ import { router } from 'expo-router';
 import * as Location from 'expo-location';
 import { supabase } from '../../../lib/supabase';
 import { isStoredAtAgent } from '../../../lib/status';
+import { SEARCH_RADIUS_M } from '../../../lib/constants';
 import {
   matchNearbyAgent,
   assignAgentToParcel,
@@ -16,9 +17,6 @@ import {
   isRecommendationEnabled,
   type RecommendedAgent,
 } from '../../../features/recommend';
-
-// 候補探索の半径。実機 GPS 誤差で「見つからない」事故を避けるため広めに取る（既存の自動マッチと同値）。
-const SEARCH_RADIUS_M = 5000;
 
 export type MatchingMode = 'loading' | 'select' | 'waiting';
 

@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
 import TreeScene from '../../components/TreeScene';
 import { colors } from '../../lib/theme';
+import { XP_LEVEL_THRESHOLDS } from '../../lib/constants';
 import { Card } from '../../components/ui';
 import { RegionalContributionCard } from '../../components/RegionalContributionCard';
 import { getMyRole } from '../../features/auth';
@@ -87,12 +88,11 @@ const bellStyles = StyleSheet.create({
 type Mode = 'recipient' | 'agent';
 
 // XP からステージを算出（後でSupabaseのuser.xpと接続）
+// しきい値（XP_LEVEL_THRESHOLDS）未満となる最初の index がステージ。
+// いずれも満たさなければ最終ステージ（= しきい値の数）。
 function xpToStage(xp: number): number {
-  if (xp < 100) return 0;
-  if (xp < 300) return 1;
-  if (xp < 600) return 2;
-  if (xp < 1000) return 3;
-  return 4;
+  const stage = XP_LEVEL_THRESHOLDS.findIndex((threshold) => xp < threshold);
+  return stage === -1 ? XP_LEVEL_THRESHOLDS.length : stage;
 }
 
 const STAGE_LABELS = ['芽吹き', '若木', '成木', '大木', '実りの木'];
