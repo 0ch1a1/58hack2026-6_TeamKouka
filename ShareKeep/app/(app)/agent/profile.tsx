@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { router } from 'expo-router';
 import { supabase } from '../../../lib/supabase';
+import { geocodeAgentAddress } from '../../../features/parcels';
 import { colors } from '../../../lib/theme';
 import { ScreenHeader, PrimaryButton, Card } from '../../../components/ui';
 
@@ -81,17 +82,16 @@ export default function AgentProfileScreen() {
 
     const fullAddress = [postalCode, address, roomNumber].join('|');
 
-    const { error } = await supabase.from('agent_profiles').upsert({
-      user_id: user.id,
-      address: fullAddress,
-      available_days: selectedDays,
-      start_time: timeFrom,
-      end_time: timeTo,
-    }, { onConflict: 'user_id' });
-
-    setSaving(false);
-
-    if (error) {
+    try {
+      await geocodeAgentAddress({
+        userId: user.id,
+        address: fullAddress,
+        availableDays: selectedDays,
+        startTime: timeFrom,
+        endTime: timeTo,
+      });
+    } catch {
+      setSaving(false);
       Alert.alert('エラー', 'プロファイルの保存に失敗しました。');
       return;
     }
@@ -99,6 +99,8 @@ export default function AgentProfileScreen() {
     if (emergencyContact) {
       await supabase.from('profiles').update({ phone: emergencyContact }).eq('id', user.id);
     }
+
+    setSaving(false);
 
     Alert.alert('保存しました', 'プロファイルを保存しました。', [
       { text: 'OK', onPress: () => router.back() },

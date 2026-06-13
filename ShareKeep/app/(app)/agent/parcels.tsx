@@ -11,12 +11,12 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import QRCode from 'react-native-qrcode-svg';
 import { supabase } from '../../../lib/supabase';
 import { colors } from '../../../lib/theme';
 import { ScreenHeader, Card } from '../../../components/ui';
+import { generateQrToken, verifyRecipientQr } from '../../../features/parcels';
 
 type MatchedParcel = {
   matchId: string;
@@ -81,17 +81,22 @@ export default function AgentParcelsScreen() {
   }, [fetchParcels]);
 
   const handleShowQR = async (parcel: MatchedParcel) => {
-    const { data } = await supabase
-      .from('qr_tokens')
-      .select('token')
-      .eq('parcel_id', parcel.parcelId)
-      .eq('qr_type', 'driver')
-      .eq('used', false)
-      .gt('expires_at', new Date().toISOString())
-      .maybeSingle();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      Alert.alert('エラー', 'ユーザー情報を取得できませんでした。');
+      return;
+    }
 
-    const token = data?.token ?? parcel.parcelId;
-    setQrParcel({ ...parcel, qrToken: token });
+    try {
+      const token = await generateQrToken({
+        parcelId: parcel.parcelId,
+        userId: user.id,
+        qrType: 'agent',
+      });
+      setQrParcel({ ...parcel, qrToken: token });
+    } catch {
+      Alert.alert('エラー', 'QRコードの生成に失敗しました。');
+    }
   };
 
   const handleOpenScanner = async (parcel: MatchedParcel) => {
@@ -111,30 +116,20 @@ export default function AgentParcelsScreen() {
     setScanned(true);
     setScanParcel(null);
 
-    const { data: tokenData, error } = await supabase
-      .from('qr_tokens')
-      .select('id, parcel_id')
-      .eq('token', data)
-      .eq('qr_type', 'recipient')
-      .eq('used', false)
-      .gt('expires_at', new Date().toISOString())
-      .maybeSingle();
-
-    if (error || !tokenData) {
+    try {
+      // 受取人QRを検証。used フラグ更新 / status 遷移 / ポイント / CO2 は
+      // verify-recipient-qr Edge Function がサーバ側でトランザクション処理する。
+      await verifyRecipientQr(data);
+    } catch {
       Alert.alert('エラー', 'QRコードが無効または期限切れです。');
       return;
     }
 
-    await Promise.all([
-      supabase.from('qr_tokens').update({ used: true }).eq('id', tokenData.id),
-      supabase.from('parcels').update({ status: 'completed' }).eq('id', tokenData.parcel_id),
-      supabase.from('delivery_matches').update({ status: 'completed' }).eq('parcel_id', tokenData.parcel_id),
-    ]);
-
     Alert.alert('引き渡し完了！', '荷物の引き渡しが完了しました。', [
       { text: 'OK', onPress: () => {
+        // 引き渡しはサーバ側（verify-recipient-qr）で完了済み。
+        // agent/complete 画面は未実装（B5 スコープ外）のため遷移せず、一覧を再取得して留まる。
         fetchParcels();
-        router.push({ pathname: '/(app)/agent/complete', params: { parcelId: tokenData.parcel_id } });
       }},
     ]);
   };

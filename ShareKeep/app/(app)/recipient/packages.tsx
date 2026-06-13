@@ -14,11 +14,11 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { supabase } from '../../../lib/supabase';
-import type { ParcelStatus } from '../../../lib/database.types';
+import { toUIStatus, type UIStatus } from '../../../lib/status';
+import { createParcel, fetchMyParcels } from '../../../features/parcels';
+import { DEMO_DELIVERY_COMPANY_ID } from '../../../lib/config';
 import { colors } from '../../../lib/theme';
 import { ScreenHeader, StatusBadge } from '../../../components/ui';
-
-type UIStatus = 'waiting' | 'stored' | 'completed';
 
 type Package = {
   id: string;
@@ -27,12 +27,6 @@ type Package = {
   status: UIStatus;
   agentName?: string;
 };
-
-function toUIStatus(status: ParcelStatus | null): UIStatus {
-  if (status === 'completed') return 'completed';
-  if (status === 'stored') return 'stored';
-  return 'waiting';
-}
 
 const STATUS_CONFIG: Record<UIStatus, { label: string; color: string; bg: string; icon: keyof typeof Ionicons.glyphMap }> = {
   waiting:   { label: '配達待ち', color: '#B45309', bg: '#FEF3C7', icon: 'time-outline' },
@@ -59,27 +53,23 @@ export default function PackagesScreen() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
 
-    const { data, error } = await supabase
-      .from('parcels')
-      .select('id, tracking_no, status, delivery_companies(name), profiles!assigned_agent_id(full_name)')
-      .eq('recipient_id', user.id)
-      .order('created_at', { ascending: false });
+    try {
+      const data = await fetchMyParcels(user.id);
 
-    if (error) {
+      const mapped: Package[] = (data ?? []).map((p) => ({
+        id: p.id,
+        trackingNumber: p.tracking_no,
+        sender: p.delivery_companies?.name ?? '不明',
+        status: toUIStatus(p.status),
+        agentName: p.assigned_agent?.full_name ?? undefined,
+      }));
+
+      setPackages(mapped);
+      setLoading(false);
+    } catch {
       Alert.alert('エラー', '荷物の取得に失敗しました。');
       return;
     }
-
-    const mapped: Package[] = (data ?? []).map((p: any) => ({
-      id: p.id,
-      trackingNumber: p.tracking_no,
-      sender: p.delivery_companies?.name ?? '不明',
-      status: toUIStatus(p.status),
-      agentName: p.profiles?.full_name ?? undefined,
-    }));
-
-    setPackages(mapped);
-    setLoading(false);
   }, []);
 
   useEffect(() => {
@@ -96,28 +86,27 @@ export default function PackagesScreen() {
   }, [fetchPackages]);
 
   const handleRegister = async () => {
-    if (!trackingInput.trim()) {
-      Alert.alert('入力エラー', '伝票番号を入力してください。');
+    // 受付番号は create_parcel RPC がサーバ側で自動採番するため、
+    // 伝票番号は任意入力（必須バリデーションなし）。入力値は送信しない。
+    setRegistering(true);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      setRegistering(false);
       return;
     }
 
-    setRegistering(true);
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-
-    const { error } = await supabase.from('parcels').insert({
-      tracking_no: trackingInput.trim(),
-      recipient_id: user.id,
-      status: 'pending',
-    });
-
-    setRegistering(false);
-
-    if (error) {
+    try {
+      await createParcel({
+        recipientId: user.id,
+        deliveryCompanyId: DEMO_DELIVERY_COMPANY_ID,
+      });
+    } catch {
+      setRegistering(false);
       Alert.alert('エラー', '荷物の登録に失敗しました。');
       return;
     }
 
+    setRegistering(false);
     setTrackingInput('');
     setModalVisible(false);
     fetchPackages();
@@ -173,7 +162,7 @@ export default function PackagesScreen() {
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>荷物を登録</Text>
-            <Text style={styles.modalLabel}>伝票番号</Text>
+            <Text style={styles.modalLabel}>伝票番号（任意）</Text>
             <TextInput
               style={styles.modalInput}
               placeholder="例: 1234-5678-9012"
@@ -182,6 +171,7 @@ export default function PackagesScreen() {
               onChangeText={setTrackingInput}
               autoCapitalize="none"
             />
+            <Text style={styles.modalHint}>※ 受付番号は登録時に自動で採番されます。</Text>
             <View style={styles.modalButtons}>
               <TouchableOpacity
                 style={styles.modalCancel}
@@ -269,6 +259,7 @@ const styles = StyleSheet.create({
   modalContent: { backgroundColor: colors.white, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 28, gap: 12 },
   modalTitle: { fontSize: 18, fontWeight: '700', color: colors.ink, marginBottom: 4 },
   modalLabel: { fontSize: 13, fontWeight: '600', color: colors.gray },
+  modalHint: { fontSize: 12, color: colors.grayLight, marginTop: -4 },
   modalInput: { height: 52, backgroundColor: colors.fieldBg, borderRadius: 12, paddingHorizontal: 16, fontSize: 16, color: colors.ink, borderWidth: 1, borderColor: colors.border },
   modalButtons: { flexDirection: 'row', gap: 12, marginTop: 4 },
   modalCancel: { flex: 1, height: 48, borderRadius: 12, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' },

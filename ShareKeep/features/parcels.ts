@@ -90,6 +90,33 @@ export async function fetchMyParcels(userId: string) {
   return data as unknown as Parcel[]
 }
 
+// 単一 parcel を id で取得（一覧の全件取得→filter を避けるための軽量版）
+export async function fetchParcel(parcelId: string) {
+  const { data, error } = await supabase
+    .from('parcels')
+    .select(
+      `
+      id,
+      tracking_no,
+      recipient_id,
+      delivery_company_id,
+      assigned_agent_id,
+      status,
+      retry_count,
+      co2_saved_kg,
+      created_at,
+      updated_at,
+      delivery_companies(name),
+      assigned_agent:profiles!assigned_agent_id(full_name)
+    `,
+    )
+    .eq('id', parcelId)
+    .maybeSingle()
+
+  if (error) throw error
+  return data as unknown as Parcel | null
+}
+
 export async function updateParcelStatus(parcelId: string, status: ParcelStatus) {
   const { error } = await supabase.rpc('update_parcel_status', {
     p_parcel_id: parcelId,
