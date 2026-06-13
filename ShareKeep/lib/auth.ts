@@ -1,6 +1,7 @@
 import { supabase } from './supabase';
 import type { Role } from './database.types';
-import { signUpRecipient, upsertProfile, getErrorMessage } from '../features/auth';
+import { signUpRecipient, upsertProfile } from '../features/auth';
+import { getErrorMessage } from './error';
 
 // パスワードの一致・長さチェック。問題があればユーザー向けメッセージ、無ければ null。
 export function validatePassword(password: string, confirmPassword: string): string | null {

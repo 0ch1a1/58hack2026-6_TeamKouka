@@ -34,6 +34,24 @@ type MatchedParcel = {
   qrToken: string | null;
 };
 
+// delivery_matches の select 結果のうち、map で参照する最小フィールドだけを表す型。
+// parcels / profiles の to-one 埋め込みは実行時は単一オブジェクトだが、生成型なしの
+// Supabase 推論では配列になり得るため両方を許容する（旧 (m: any) と等価のアクセスを保つ）。
+type Embed<T> = T | T[] | null;
+type ParcelEmbed = { tracking_no: string | null; status: string | null; storage_deadline_at: string | null };
+type ProfileEmbed = { full_name: string | null };
+type MatchRow = {
+  id: string;
+  parcel_id: string;
+  status: string | null;
+  parcels: Embed<ParcelEmbed>;
+  profiles: Embed<ProfileEmbed>;
+};
+
+// to-one 埋め込みが配列推論された場合に先頭要素を取り出す。実行時は単一オブジェクト
+// （Array.isArray=false）なので値をそのまま返し、旧挙動と完全に等価。
+const toOne = <T,>(v: Embed<T>): T | null => (Array.isArray(v) ? (v[0] ?? null) : v);
+
 export default function AgentParcelsScreen() {
   const [parcels, setParcels] = useState<MatchedParcel[]>([]);
   const [loading, setLoading] = useState(true);
@@ -62,16 +80,21 @@ export default function AgentParcelsScreen() {
 
     if (error) { setLoading(false); return; }
 
-    const mapped: MatchedParcel[] = (data ?? []).map((m: any) => ({
-      matchId: m.id,
-      parcelId: m.parcel_id,
-      trackingNo: m.parcels?.tracking_no ?? '—',
-      recipientName: m.profiles?.full_name ?? '不明',
-      status: m.status ?? 'matched',
-      parcelStatus: m.parcels?.status ?? null,
-      deadlineAt: m.parcels?.storage_deadline_at ?? null,
-      qrToken: null,
-    }));
+    const rows = (data ?? []) as MatchRow[];
+    const mapped: MatchedParcel[] = rows.map((m) => {
+      const parcel = toOne(m.parcels);
+      const profile = toOne(m.profiles);
+      return {
+        matchId: m.id,
+        parcelId: m.parcel_id,
+        trackingNo: parcel?.tracking_no ?? '—',
+        recipientName: profile?.full_name ?? '不明',
+        status: m.status ?? 'matched',
+        parcelStatus: parcel?.status ?? null,
+        deadlineAt: parcel?.storage_deadline_at ?? null,
+        qrToken: null,
+      };
+    });
 
     setParcels(mapped);
     setLoading(false);

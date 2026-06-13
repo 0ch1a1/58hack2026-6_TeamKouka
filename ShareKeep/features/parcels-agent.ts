@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase'
+import { getFunctionErrorMessage, isFunctionFailure } from '../lib/error'
 import type { AppNotification, NearbyAgent } from './parcels-types'
 
 // 代理人（agent）・配送会社管理・通知まわりの parcel API。
@@ -48,25 +49,6 @@ export async function verifyRecipientQr(token: string) {
   }
 
   return data as { success: boolean; error?: unknown }
-}
-
-function isFunctionFailure(data: unknown): data is { success: false; error?: unknown } {
-  return (
-    typeof data === 'object' &&
-    data !== null &&
-    'success' in data &&
-    (data as { success?: unknown }).success === false
-  )
-}
-
-function getFunctionErrorMessage(error: unknown, data: unknown) {
-  if (data && typeof data === 'object' && 'error' in data) {
-    return String((data as { error: unknown }).error)
-  }
-
-  if (error instanceof Error) return error.message
-
-  return String(error)
 }
 
 export async function findNearbyAgents(params: {
