@@ -7,5 +7,14 @@
 // ⚠️ DB を作り直す・seed が変わるとこの UUID は無効になり、create_parcel が
 //    静かに FK エラー（'delivery company not found'）になる。
 //    その場合は `supabase db query --linked "select id,name from delivery_companies"` で
-//    新しい ID を取得し、ここを更新すること。
-export const DEMO_DELIVERY_COMPANY_ID = 'd98697e6-e71d-463f-9d59-a706817db938';
+//    新しい ID を取得すること。
+//
+// env `EXPO_PUBLIC_DEMO_DELIVERY_COMPANY_ID` で上書き可能（Expo は EXPO_PUBLIC_
+//    プレフィックスの env をクライアントに露出する）。DB 再作成時はコード変更せず
+//    env で新 ID を渡せばよい。未設定・空（.env.example をそのままコピーした空値含む）
+//    なら下記の既定 UUID にフォールバックする。
+//    ※ `??` ではなく `.trim() ||` を使うのは、空文字 '' は nullish ではないため
+//      `??` ではフォールバックされず、空 ID が create_parcel に渡って壊れるのを防ぐため。
+export const DEMO_DELIVERY_COMPANY_ID =
+  process.env.EXPO_PUBLIC_DEMO_DELIVERY_COMPANY_ID?.trim() ||
+  'd98697e6-e71d-463f-9d59-a706817db938';
