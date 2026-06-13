@@ -9,6 +9,7 @@ import {
   View,
 } from 'react-native'
 import type { User } from '@supabase/supabase-js'
+import { getErrorMessage } from '../features/auth'
 import { createParcel, fetchMyParcels, Parcel } from '../features/parcels'
 
 type HomeScreenProps = {
@@ -29,7 +30,7 @@ export function HomeScreen({ user, onSelectParcel }: HomeScreenProps) {
     try {
       setParcels(await fetchMyParcels(user.id))
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : String(error))
+      setMessage(getErrorMessage(error))
     } finally {
       setLoading(false)
     }
@@ -47,7 +48,7 @@ export function HomeScreen({ user, onSelectParcel }: HomeScreenProps) {
       setParcels((current) => [parcel, ...current])
       setDeliveryCompanyId('')
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : String(error))
+      setMessage(getErrorMessage(error))
     } finally {
       setLoading(false)
     }

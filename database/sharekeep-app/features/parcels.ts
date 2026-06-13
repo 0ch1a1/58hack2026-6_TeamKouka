@@ -22,18 +22,33 @@ export type Parcel = {
   updated_at?: string | null
 }
 
+export type NearbyAgent = {
+  user_id: string
+  address: string
+  address_detail: string | null
+  distance_meters: number
+}
+
+export type AppNotification = {
+  id: string
+  user_id: string
+  parcel_id: string | null
+  notification_type: string
+  title: string
+  body: string
+  payload: Record<string, unknown>
+  read_at: string | null
+  created_at: string
+}
+
 export async function createParcel(params: {
   recipientId: string
   deliveryCompanyId: string
 }) {
-  const { data, error } = await supabase
-    .from('parcels')
-    .insert({
-      recipient_id: params.recipientId,
-      delivery_company_id: params.deliveryCompanyId,
-    })
-    .select('*')
-    .single()
+  const { data, error } = await supabase.rpc('create_parcel', {
+    p_recipient_id: params.recipientId,
+    p_delivery_company_id: params.deliveryCompanyId,
+  })
 
   if (error) throw error
   return data as Parcel
@@ -119,12 +134,13 @@ export async function findNearbyAgents(params: {
   })
 
   if (error) throw error
-  return data
+  return data as NearbyAgent[]
 }
 
 export async function upsertAgentProfile(params: {
   userId: string
   address: string
+  addressDetail?: string
   latitude: number
   longitude: number
   availableDays?: string[]
@@ -134,6 +150,7 @@ export async function upsertAgentProfile(params: {
   const { data, error } = await supabase.rpc('upsert_agent_profile', {
     p_user_id: params.userId,
     p_address: params.address,
+    p_address_detail: params.addressDetail ?? null,
     p_lat: params.latitude,
     p_lng: params.longitude,
     p_available_days: params.availableDays ?? null,
@@ -164,6 +181,21 @@ export async function matchNearbyAgent(params: {
   return data
 }
 
+export async function assignAgentToParcel(params: {
+  parcelId: string
+  agentId: string
+  distanceMeters?: number | null
+}) {
+  const { data, error } = await supabase.rpc('assign_agent_to_parcel', {
+    p_parcel_id: params.parcelId,
+    p_agent_id: params.agentId,
+    p_distance_meters: params.distanceMeters ?? null,
+  })
+
+  if (error) throw error
+  return data
+}
+
 export async function consumeAgentPoints(params: {
   agentId: string
   points: number
@@ -182,6 +214,7 @@ export async function consumeAgentPoints(params: {
 export async function geocodeAgentAddress(params: {
   userId: string
   address: string
+  addressDetail?: string
   availableDays?: string[]
   startTime?: string
   endTime?: string
@@ -190,6 +223,7 @@ export async function geocodeAgentAddress(params: {
     body: {
       userId: params.userId,
       address: params.address,
+      addressDetail: params.addressDetail ?? null,
       availableDays: params.availableDays ?? null,
       startTime: params.startTime ?? null,
       endTime: params.endTime ?? null,
@@ -199,6 +233,8 @@ export async function geocodeAgentAddress(params: {
   if (error) throw error
   return data as {
     success: boolean
+    address?: string
+    addressDetail?: string | null
     latitude?: number
     longitude?: number
     profile?: unknown
@@ -214,6 +250,7 @@ export async function getAgentLocations() {
     user_id: string
     full_name: string
     address: string
+    address_detail: string | null
     latitude: number
     longitude: number
     available_days: string[] | null
@@ -270,7 +307,7 @@ export async function fetchMyNotifications() {
     .order('created_at', { ascending: false })
 
   if (error) throw error
-  return data
+  return data as AppNotification[]
 }
 
 export async function markNotificationRead(notificationId: string) {

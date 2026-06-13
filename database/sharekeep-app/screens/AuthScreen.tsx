@@ -8,7 +8,7 @@ import {
   View,
 } from 'react-native'
 import type { User } from '@supabase/supabase-js'
-import { signIn, signUpRecipient } from '../features/auth'
+import { getErrorMessage, signIn, signUpRecipient } from '../features/auth'
 
 type AuthScreenProps = {
   onSignedIn: (user: User) => void
@@ -30,7 +30,7 @@ export function AuthScreen({ onSignedIn }: AuthScreenProps) {
       const user = await signUpRecipient({ email, password, fullName, phone })
       onSignedIn(user)
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : String(error))
+      setMessage(getErrorMessage(error))
     } finally {
       setLoading(false)
     }
@@ -44,7 +44,7 @@ export function AuthScreen({ onSignedIn }: AuthScreenProps) {
       const session = await signIn(email, password)
       if (session?.user) onSignedIn(session.user)
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : String(error))
+      setMessage(getErrorMessage(error))
     } finally {
       setLoading(false)
     }

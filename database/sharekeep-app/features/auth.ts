@@ -11,21 +11,51 @@ export async function signUpRecipient(params: {
   const { data, error } = await supabase.auth.signUp({
     email: params.email,
     password: params.password,
+    options: {
+      data: {
+        role: 'recipient',
+        full_name: params.fullName,
+        phone: params.phone ?? null,
+      },
+    },
   })
 
   if (error) throw error
   if (!data.user) throw new Error('Failed to create user')
 
-  const { error: profileError } = await supabase.from('profiles').insert({
-    id: data.user.id,
-    role: 'recipient',
-    full_name: params.fullName,
-    phone: params.phone ?? null,
-  })
-
-  if (profileError) throw profileError
-
   return data.user
+}
+
+export function getErrorMessage(error: unknown) {
+  if (error instanceof Error) return error.message
+
+  if (error && typeof error === 'object') {
+    const maybeError = error as {
+      message?: unknown
+      error_description?: unknown
+      details?: unknown
+      hint?: unknown
+      code?: unknown
+    }
+
+    const parts = [
+      maybeError.message,
+      maybeError.error_description,
+      maybeError.details,
+      maybeError.hint,
+      maybeError.code ? `code: ${String(maybeError.code)}` : undefined,
+    ].filter(Boolean)
+
+    if (parts.length > 0) return parts.map(String).join('\n')
+
+    try {
+      return JSON.stringify(error, null, 2)
+    } catch {
+      return String(error)
+    }
+  }
+
+  return String(error)
 }
 
 export async function signIn(email: string, password: string) {

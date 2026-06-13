@@ -99,7 +99,7 @@ export default function App() {
           {tab === 'home' ? (
             <HomeScreen key={refreshKey} onSelectParcel={setSelectedParcel} user={user} />
           ) : null}
-          {tab === 'agent' ? <AgentScreen /> : null}
+          {tab === 'agent' ? <AgentScreen user={user} /> : null}
           {tab === 'qr' ? <QrScanScreen /> : null}
         </>
       )}
