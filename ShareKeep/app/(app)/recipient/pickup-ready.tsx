@@ -10,7 +10,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { router, useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams } from 'expo-router';
 import QRCode from 'react-native-qrcode-svg';
 import { supabase, getDeliveryMatch } from '../../../lib/supabase';
 import { colors, radius } from '../../../lib/theme';
@@ -35,8 +35,33 @@ export default function PickupReadyScreen() {
     if (!parcelId) { setLoading(false); return; }
 
     const fetchData = async () => {
-      // delivery_matches から代理人を取得（agent_id で profiles を JOIN）
-      const { data: match, error: matchError } = await getDeliveryMatch(parcelId);
+      // 代理人(JOIN) / 追跡番号 / 引き渡しQRは parcelId だけで引けて互いに独立なので並列取得
+      const [
+        { data: match, error: matchError },
+        { data: parcel },
+        { data: token },
+      ] = await Promise.all([
+        // delivery_matches から代理人を取得（agent_id で profiles を JOIN）
+        getDeliveryMatch(parcelId),
+        // 追跡番号を parcels から取得
+        supabase
+          .from('parcels')
+          .select('tracking_no')
+          .eq('id', parcelId)
+          .maybeSingle(),
+        // 引き渡し確認QR（受取人提示用トークン）を取得
+        supabase
+          .from('qr_tokens')
+          .select('token')
+          .eq('parcel_id', parcelId)
+          .eq('qr_type', 'recipient')
+          .eq('used', false)
+          .gt('expires_at', new Date().toISOString())
+          .maybeSingle(),
+      ]);
+
+      setTrackingNo((parcel as any)?.tracking_no ?? '—');
+      setQrToken((token as any)?.token ?? parcelId);
 
       if (matchError || !match) {
         Alert.alert('エラー', '代理人情報の取得に失敗しました。');
@@ -65,26 +90,6 @@ export default function PickupReadyScreen() {
       }
 
       setAgent({ name: agentName, postalCode, address, floor });
-
-      // 追跡番号を parcels から取得
-      const { data: parcel } = await supabase
-        .from('parcels')
-        .select('tracking_no')
-        .eq('id', parcelId)
-        .maybeSingle();
-      setTrackingNo((parcel as any)?.tracking_no ?? '—');
-
-      // 引き渡し確認QR（受取人提示用トークン）を取得
-      const { data: token } = await supabase
-        .from('qr_tokens')
-        .select('token')
-        .eq('parcel_id', parcelId)
-        .eq('qr_type', 'recipient')
-        .eq('used', false)
-        .gt('expires_at', new Date().toISOString())
-        .maybeSingle();
-      setQrToken((token as any)?.token ?? parcelId);
-
       setLoading(false);
     };
 
