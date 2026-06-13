@@ -30,6 +30,9 @@ export {
   subscribeParcel,
   matchNearbyAgent,
   assignAgentToParcel,
+  upsertRecipientProfile,
+  fetchRecipientHome,
+  fetchRecipientCoordinates,
 } from './parcels-recipient'
 
 // 配達員（delivery_company）向け API
