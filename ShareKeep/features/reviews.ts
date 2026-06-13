@@ -19,6 +19,9 @@ export type AgentRating = {
   review_count: number
 }
 
+// コメントの最大文字数。DB は comment に上限を設けないため、過大入力はクライアント側で防ぐ。
+const COMMENT_MAX_LENGTH = 500
+
 // 評価を投稿。agent_id はクライアント指定せず RPC 側で
 // parcels.assigned_agent_id から導出する（受取人が任意指定不可）。
 export async function createReview(params: {
@@ -26,10 +29,25 @@ export async function createReview(params: {
   rating: number
   comment?: string | null
 }) {
+  // rating は 1〜5 の整数（DB CHECK rating between 1 and 5 と整合）。
+  if (!Number.isInteger(params.rating) || params.rating < 1 || params.rating > 5) {
+    throw new Error('評価は1〜5の整数で入力してください')
+  }
+
+  // comment は任意。指定時は trim して上限を超えないか検証する。
+  let comment: string | null = null
+  if (params.comment != null) {
+    const trimmed = params.comment.trim()
+    if (trimmed.length > COMMENT_MAX_LENGTH) {
+      throw new Error(`コメントは${COMMENT_MAX_LENGTH}文字以内で入力してください`)
+    }
+    comment = trimmed === '' ? null : trimmed
+  }
+
   const { data, error } = await supabase.rpc('create_review', {
     p_parcel_id: params.parcelId,
     p_rating: params.rating,
-    p_comment: params.comment ?? null,
+    p_comment: comment,
   })
 
   if (error) throw error

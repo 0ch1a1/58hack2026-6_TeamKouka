@@ -70,6 +70,14 @@ export default function AgentProfileScreen() {
       Alert.alert('入力エラー', '住所は必須です。');
       return;
     }
+    if (address.length > 200) {
+      Alert.alert('入力エラー', '住所は200文字以内で入力してください。');
+      return;
+    }
+    if (roomNumber.length > 100) {
+      Alert.alert('入力エラー', '部屋番号・号室は100文字以内で入力してください。');
+      return;
+    }
     if (selectedDays.length === 0) {
       Alert.alert('入力エラー', '受取可能曜日を1日以上選択してください。');
       return;
@@ -158,6 +166,7 @@ export default function AgentProfileScreen() {
               placeholderTextColor="#9CA3AF"
               value={address}
               onChangeText={setAddress}
+              maxLength={200}
             />
           </View>
 
@@ -169,6 +178,7 @@ export default function AgentProfileScreen() {
               placeholderTextColor="#9CA3AF"
               value={roomNumber}
               onChangeText={setRoomNumber}
+              maxLength={100}
             />
           </View>
         </Card>

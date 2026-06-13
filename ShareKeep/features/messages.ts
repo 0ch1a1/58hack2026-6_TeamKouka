@@ -12,6 +12,10 @@ export type HandoverMessage = {
   created_at: string
 }
 
+// メッセージ本文の最大文字数。DB は空本文禁止（length(btrim(body)) > 0）のみ規定するため、
+// 過大入力を防ぐ上限はクライアント側で設ける。
+const MESSAGE_MAX_LENGTH = 1000
+
 // メッセージ送信。sender_id は auth.getUser() の id を使う（RLS の with check と整合）。
 export async function sendMessage(parcelId: string, body: string) {
   const {
@@ -19,9 +23,15 @@ export async function sendMessage(parcelId: string, body: string) {
   } = await supabase.auth.getUser()
   if (!user) throw new Error('ログインが必要です')
 
+  const trimmedBody = body.trim()
+  if (!trimmedBody) throw new Error('メッセージを入力してください')
+  if (trimmedBody.length > MESSAGE_MAX_LENGTH) {
+    throw new Error(`メッセージは${MESSAGE_MAX_LENGTH}文字以内で入力してください`)
+  }
+
   const { data, error } = await supabase
     .from('handover_messages')
-    .insert({ parcel_id: parcelId, sender_id: user.id, body })
+    .insert({ parcel_id: parcelId, sender_id: user.id, body: trimmedBody })
     .select()
     .single()
 
