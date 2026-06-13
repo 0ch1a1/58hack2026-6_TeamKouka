@@ -25,7 +25,6 @@ export function PrimaryButton({ label, onPress, loading, disabled, icon, style }
       style={[styles.button, style]}
       onPress={onPress}
       disabled={disabled || loading}
-      activeOpacity={0.8}
     >
       {loading ? (
         <ActivityIndicator color={colors.white} />

@@ -10,11 +10,8 @@ export const colors = {
   ink: '#111827',
   gray: '#6B7280',
   grayLight: '#9CA3AF',
-  grayBg: '#F3F4F6',
   fieldBg: '#F9FAFB',
   border: '#D1FAE5',
-  borderGray: '#E5E7EB',
-  danger: '#EF4444',
 } as const;
 
 // カード等で多用される標準シャドウ。
@@ -29,6 +26,4 @@ export const cardShadow = {
 export const radius = {
   card: 16,
   button: 14,
-  input: 12,
-  pill: 20,
 } as const;

@@ -1,7 +1,7 @@
 import { View, Text, StyleSheet } from 'react-native';
 import { colors } from '../../lib/theme';
 
-// 「ラベル : 値」の1行。matching / pickup-ready / delivery-complete で重複していた行。
+// 「ラベル : 値」の1行。delivery-complete で使用（pickup-ready 等にも展開予定）。
 export function InfoRow({ label, value }: { label: string; value: string }) {
   return (
     <View style={styles.row}>
