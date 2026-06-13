@@ -1,5 +1,21 @@
 import { supabase } from '../lib/supabase'
-import type { Parcel } from './parcels-types'
+import { toOne } from './parcels-types'
+import type { Embed, Parcel } from './parcels-types'
+
+// Supabase の生の parcels 行型。to-one 埋め込み（delivery_companies / assigned_agent）は
+// 生成型なしでは配列推論されるため Embed<T> で受け、toOne で単一化して Parcel に正規化する。
+type ParcelRow = Omit<Parcel, 'delivery_companies' | 'assigned_agent'> & {
+  delivery_companies: Embed<{ name: string }>
+  assigned_agent: Embed<{ full_name: string | null }>
+}
+
+// 生の行を Parcel に正規化（埋め込みを toOne で単一化）。実行時は埋め込みが既に単一
+// オブジェクトなので toOne は恒等であり、値・null 性を一切変えない no-op 正規化。
+const normalizeParcel = (row: ParcelRow): Parcel => ({
+  ...row,
+  delivery_companies: toOne(row.delivery_companies),
+  assigned_agent: toOne(row.assigned_agent),
+})
 
 // 受取人（recipient）向けの parcel API。
 
@@ -98,9 +114,9 @@ export async function fetchMyParcels(userId: string) {
     .order('created_at', { ascending: false })
 
   if (error) throw error
-  // Supabase は to-one 埋め込み（delivery_companies / assigned_agent）を実行時は
-  // 単一オブジェクトで返すが、生成型なしでは配列推論になるため unknown 経由でキャスト
-  return data as unknown as Parcel[]
+  // to-one 埋め込み（delivery_companies / assigned_agent）は実行時は単一オブジェクトだが
+  // 生成型なしでは配列推論になる。各行を toOne で単一化して Parcel に正規化する（no-op）。
+  return ((data ?? []) as ParcelRow[]).map(normalizeParcel)
 }
 
 // 単一 parcel を id で取得（一覧の全件取得→filter を避けるための軽量版）
@@ -129,7 +145,8 @@ export async function fetchParcel(parcelId: string) {
     .maybeSingle()
 
   if (error) throw error
-  return data as unknown as Parcel | null
+  // 単一行版。埋め込みを toOne で単一化して Parcel に正規化（no-op、値・null 性は不変）。
+  return data ? normalizeParcel(data as ParcelRow) : null
 }
 
 export async function matchNearbyAgent(params: {
