@@ -14,11 +14,11 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { supabase } from '../../../lib/supabase';
-import type { ParcelStatus } from '../../../lib/database.types';
+import { toUIStatus, type UIStatus } from '../../../lib/status';
+import { createParcel, fetchMyParcels } from '../../../features/parcels';
+import { DEMO_DELIVERY_COMPANY_ID } from '../../../lib/config';
 import { colors } from '../../../lib/theme';
 import { ScreenHeader, StatusBadge } from '../../../components/ui';
-
-type UIStatus = 'waiting' | 'stored' | 'completed';
 
 type Package = {
   id: string;
@@ -27,12 +27,6 @@ type Package = {
   status: UIStatus;
   agentName?: string;
 };
-
-function toUIStatus(status: ParcelStatus | null): UIStatus {
-  if (status === 'completed') return 'completed';
-  if (status === 'stored') return 'stored';
-  return 'waiting';
-}
 
 const STATUS_CONFIG: Record<UIStatus, { label: string; color: string; bg: string; icon: keyof typeof Ionicons.glyphMap }> = {
   waiting:   { label: '配達待ち', color: '#B45309', bg: '#FEF3C7', icon: 'time-outline' },
@@ -59,27 +53,23 @@ export default function PackagesScreen() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
 
-    const { data, error } = await supabase
-      .from('parcels')
-      .select('id, tracking_no, status, delivery_companies(name), profiles!assigned_agent_id(full_name)')
-      .eq('recipient_id', user.id)
-      .order('created_at', { ascending: false });
+    try {
+      const data = await fetchMyParcels(user.id);
 
-    if (error) {
+      const mapped: Package[] = (data ?? []).map((p) => ({
+        id: p.id,
+        trackingNumber: p.tracking_no,
+        sender: p.delivery_companies?.name ?? '不明',
+        status: toUIStatus(p.status),
+        agentName: p.assigned_agent?.full_name ?? undefined,
+      }));
+
+      setPackages(mapped);
+      setLoading(false);
+    } catch {
       Alert.alert('エラー', '荷物の取得に失敗しました。');
       return;
     }
-
-    const mapped: Package[] = (data ?? []).map((p: any) => ({
-      id: p.id,
-      trackingNumber: p.tracking_no,
-      sender: p.delivery_companies?.name ?? '不明',
-      status: toUIStatus(p.status),
-      agentName: p.profiles?.full_name ?? undefined,
-    }));
-
-    setPackages(mapped);
-    setLoading(false);
   }, []);
 
   useEffect(() => {
@@ -103,21 +93,23 @@ export default function PackagesScreen() {
 
     setRegistering(true);
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
+    if (!user) {
+      setRegistering(false);
+      return;
+    }
 
-    const { error } = await supabase.from('parcels').insert({
-      tracking_no: trackingInput.trim(),
-      recipient_id: user.id,
-      status: 'pending',
-    });
-
-    setRegistering(false);
-
-    if (error) {
+    try {
+      await createParcel({
+        recipientId: user.id,
+        deliveryCompanyId: DEMO_DELIVERY_COMPANY_ID,
+      });
+    } catch {
+      setRegistering(false);
       Alert.alert('エラー', '荷物の登録に失敗しました。');
       return;
     }
 
+    setRegistering(false);
     setTrackingInput('');
     setModalVisible(false);
     fetchPackages();
