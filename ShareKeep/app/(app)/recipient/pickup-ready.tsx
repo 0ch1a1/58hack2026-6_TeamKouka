@@ -13,7 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import QRCode from 'react-native-qrcode-svg';
 import { supabase, getDeliveryMatch } from '../../../lib/supabase';
-import { generateQrToken, subscribeParcel } from '../../../features/parcels';
+import { generateQrToken, subscribeParcel, fetchParcel } from '../../../features/parcels';
 import { isHandedOff } from '../../../lib/status';
 import { colors, radius } from '../../../lib/theme';
 import { ScreenHeader, PrimaryButton, Card, InfoRow } from '../../../components/ui';
@@ -40,19 +40,15 @@ export default function PickupReadyScreen() {
       // 代理人(JOIN) / 追跡番号は parcelId だけで引けて互いに独立なので並列取得
       const [
         { data: match, error: matchError },
-        { data: parcel },
+        parcel,
       ] = await Promise.all([
         // delivery_matches から代理人を取得（agent_id で profiles を JOIN・A7 許可）
         getDeliveryMatch(parcelId),
-        // 追跡番号を parcels から取得
-        supabase
-          .from('parcels')
-          .select('tracking_no')
-          .eq('id', parcelId)
-          .maybeSingle(),
+        // 追跡番号を parcels から取得（features 経由）
+        fetchParcel(parcelId),
       ]);
 
-      setTrackingNo((parcel as any)?.tracking_no ?? '—');
+      setTrackingNo(parcel?.tracking_no ?? '—');
 
       // 引き渡し確認QR（受取人提示用トークン）を features 経由で生成
       try {
@@ -106,12 +102,8 @@ export default function PickupReadyScreen() {
 
     // 引き渡し完了（handed_to_recipient / completed）になったら受取完了画面へ遷移
     const unsubscribe = subscribeParcel(parcelId, async () => {
-      const { data } = await supabase
-        .from('parcels')
-        .select('status')
-        .eq('id', parcelId)
-        .maybeSingle();
-      if (isHandedOff((data as any)?.status)) {
+      const parcel = await fetchParcel(parcelId);
+      if (isHandedOff(parcel?.status ?? null)) {
         router.replace({ pathname: '/(app)/recipient/delivery-complete', params: { parcelId } });
       }
     });

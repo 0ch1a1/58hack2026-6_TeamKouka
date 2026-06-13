@@ -58,24 +58,32 @@ export async function signUpWithProfile(
     if (error) throw error;
     if (!data.user) throw new Error('Failed to create user');
 
-    // トリガーが設定しない追加項目（company_name / employee_id）を確実に永続化する。
+    // 追加項目（company_name / employee_id）の永続化。
+    // 本来はトリガーが metadata から拾うのが筋だが、未対応の場合の保険として upsertProfile を呼ぶ。
+    // ただしメール確認が有効な設定では signUp 直後にセッションが無く RLS で弾かれうるため、
+    // ここは「ベストエフォート」とし、失敗してもサインアップ自体は成功扱いにする（ログのみ）。
     if (profile.company_name || profile.employee_id) {
-      await upsertProfile({
-        id: data.user.id,
-        role: profile.role,
-        fullName: profile.full_name,
-        phone: profile.phone,
-        companyName: profile.company_name,
-        employeeId: profile.employee_id,
-      });
+      try {
+        await upsertProfile({
+          id: data.user.id,
+          role: profile.role,
+          fullName: profile.full_name,
+          phone: profile.phone,
+          companyName: profile.company_name,
+          employeeId: profile.employee_id,
+        });
+      } catch (e) {
+        console.error('[signUpWithProfile] upsertProfile failed (non-fatal):', getErrorMessage(e));
+      }
     }
 
     return null;
   } catch (error) {
-    const message = getErrorMessage(error);
-    if (message.includes('already registered')) {
+    // 詳細（Postgres code / hint 等）は開発ログにのみ出し、ユーザーには固定文言を返す。
+    console.error('[signUpWithProfile] failed:', getErrorMessage(error));
+    if (getErrorMessage(error).includes('already registered')) {
       return { title: '登録エラー', message: 'このメールアドレスはすでに登録されています。' };
     }
-    return { title: '登録エラー', message };
+    return { title: '登録エラー', message: '登録に失敗しました。時間をおいて再度お試しください。' };
   }
 }

@@ -11,7 +11,6 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import QRCode from 'react-native-qrcode-svg';
 import { supabase } from '../../../lib/supabase';
@@ -114,7 +113,6 @@ export default function AgentParcelsScreen() {
 
   const handleQRScanned = async ({ data }: { data: string }) => {
     if (scanned || !scanParcel) return;
-    const handedParcelId = scanParcel.parcelId;
     setScanned(true);
     setScanParcel(null);
 
@@ -129,9 +127,9 @@ export default function AgentParcelsScreen() {
 
     Alert.alert('引き渡し完了！', '荷物の引き渡しが完了しました。', [
       { text: 'OK', onPress: () => {
+        // 引き渡しはサーバ側（verify-recipient-qr）で完了済み。
+        // agent/complete 画面は未実装（B5 スコープ外）のため遷移せず、一覧を再取得して留まる。
         fetchParcels();
-        // TODO(B5): agent/complete 未実装
-        router.push({ pathname: '/(app)/agent/complete', params: { parcelId: handedParcelId } });
       }},
     ]);
   };

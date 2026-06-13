@@ -10,7 +10,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { supabase } from '../../../lib/supabase';
-import { fetchMyParcels } from '../../../features/parcels';
+import { fetchParcel } from '../../../features/parcels';
 import { colors } from '../../../lib/theme';
 import { PrimaryButton, Card, InfoRow } from '../../../components/ui';
 
@@ -30,10 +30,8 @@ export default function DeliveryCompleteScreen() {
 
     const fetchData = async () => {
       try {
-        const { data: { user } } = await supabase.auth.getUser();
-
-        const [parcels, pointRes] = await Promise.all([
-          user ? fetchMyParcels(user.id) : Promise.resolve([]),
+        const [parcel, pointRes] = await Promise.all([
+          fetchParcel(parcelId),
           // point_transactions には feature 関数がないため直接読みのまま残置
           supabase
             .from('point_transactions')
@@ -43,8 +41,6 @@ export default function DeliveryCompleteScreen() {
             .limit(1)
             .maybeSingle(),
         ]);
-
-        const parcel = parcels.find((p) => p.id === parcelId);
 
         setResult({
           trackingNo: parcel?.tracking_no ?? '—',

@@ -13,8 +13,7 @@ import * as Location from 'expo-location';
 import { colors } from '../../../lib/theme';
 import { ScreenHeader, Card } from '../../../components/ui';
 import { isStoredAtAgent } from '../../../lib/status';
-import { matchNearbyAgent, subscribeParcel, fetchMyParcels } from '../../../features/parcels';
-import { getCurrentUser } from '../../../features/auth';
+import { matchNearbyAgent, subscribeParcel, fetchParcel } from '../../../features/parcels';
 
 export default function MatchingScreen() {
   const { parcelId, trackingNumber } = useLocalSearchParams<{
@@ -52,10 +51,7 @@ export default function MatchingScreen() {
     // 代理人が保管状態（delivered_to_agent）になったら pickup-ready へ遷移
     const checkAndNavigate = async () => {
       try {
-        const user = await getCurrentUser();
-        if (!user) return;
-        const parcels = await fetchMyParcels(user.id);
-        const parcel = parcels.find((p) => p.id === parcelId);
+        const parcel = await fetchParcel(parcelId);
         if (!cancelled && parcel && isStoredAtAgent(parcel.status)) {
           router.replace({ pathname: '/(app)/recipient/pickup-ready', params: { parcelId } });
         }
@@ -83,7 +79,9 @@ export default function MatchingScreen() {
           longitude: position.coords.longitude,
         });
       } catch {
+        // 手配に失敗した場合は待っても遷移しないため、購読を開始せず終了する。
         Alert.alert('エラー', '代理人の手配に失敗しました。しばらくしてからもう一度お試しください。');
+        return;
       }
 
       if (cancelled) return;

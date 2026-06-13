@@ -86,11 +86,8 @@ export default function PackagesScreen() {
   }, [fetchPackages]);
 
   const handleRegister = async () => {
-    if (!trackingInput.trim()) {
-      Alert.alert('入力エラー', '伝票番号を入力してください。');
-      return;
-    }
-
+    // 受付番号は create_parcel RPC がサーバ側で自動採番するため、
+    // 伝票番号は任意入力（必須バリデーションなし）。入力値は送信しない。
     setRegistering(true);
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
@@ -165,7 +162,7 @@ export default function PackagesScreen() {
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>荷物を登録</Text>
-            <Text style={styles.modalLabel}>伝票番号</Text>
+            <Text style={styles.modalLabel}>伝票番号（任意）</Text>
             <TextInput
               style={styles.modalInput}
               placeholder="例: 1234-5678-9012"
@@ -174,6 +171,7 @@ export default function PackagesScreen() {
               onChangeText={setTrackingInput}
               autoCapitalize="none"
             />
+            <Text style={styles.modalHint}>※ 受付番号は登録時に自動で採番されます。</Text>
             <View style={styles.modalButtons}>
               <TouchableOpacity
                 style={styles.modalCancel}
@@ -261,6 +259,7 @@ const styles = StyleSheet.create({
   modalContent: { backgroundColor: colors.white, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 28, gap: 12 },
   modalTitle: { fontSize: 18, fontWeight: '700', color: colors.ink, marginBottom: 4 },
   modalLabel: { fontSize: 13, fontWeight: '600', color: colors.gray },
+  modalHint: { fontSize: 12, color: colors.grayLight, marginTop: -4 },
   modalInput: { height: 52, backgroundColor: colors.fieldBg, borderRadius: 12, paddingHorizontal: 16, fontSize: 16, color: colors.ink, borderWidth: 1, borderColor: colors.border },
   modalButtons: { flexDirection: 'row', gap: 12, marginTop: 4 },
   modalCancel: { flex: 1, height: 48, borderRadius: 12, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' },
