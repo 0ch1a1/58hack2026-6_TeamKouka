@@ -97,7 +97,7 @@ function Tree({ stage }: TreeProps) {
               position={[0, leavesY + layer.yOffset, 0]}
               scale={leavesScale * layer.scaleFactor}
             >
-              <coneGeometry args={[layer.cone[0], layer.cone[1], LEAVES_RADIAL_SEGMENTS]} />
+              <coneGeometry args={[...layer.cone, LEAVES_RADIAL_SEGMENTS]} />
               <meshBasicMaterial color={leavesColor} />
             </mesh>
           )
