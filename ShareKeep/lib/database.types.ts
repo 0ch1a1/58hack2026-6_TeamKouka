@@ -141,3 +141,34 @@ export interface SupportReport {
   note: string | null;
   created_at: string;
 }
+
+// 機能8: 配達員ライブ位置トラッキング（ダミー座標＋Realtime）
+export interface DeliveryLocation {
+  parcel_id: string;
+  lat: number | null;
+  lng: number | null;
+  progress: number;        // 0..100
+  updated_at: string;
+}
+
+// 機能9: 追記専用監査ログ（append-onlyハッシュチェーン）
+export type ParcelEventType =
+  | 'registered'
+  | 'absence_reported'
+  | 'matched'
+  | 'handoff_primary'
+  | 'handoff_secondary'
+  | 'completed';
+
+export interface ParcelEvent {
+  id: string;
+  parcel_id: string | null;
+  event_type: ParcelEventType | string;
+  actor_id: string | null;
+  client_event_id: string;
+  payload_text: string;
+  payload: Record<string, unknown> | null;
+  prev_hash: string | null;
+  hash: string;
+  created_at: string;
+}
