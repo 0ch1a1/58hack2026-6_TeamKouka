@@ -29,6 +29,14 @@ export type DriverParcel = Parcel & {
   recipient?: { full_name: string | null } | null
 }
 
+// Supabase の to-one 埋め込み（FK 由来）は実行時は単一オブジェクトだが、生成型なしの
+// 推論では配列になり得る。両方を許容する型と、単一化する no-op 正規化ヘルパ（PR #79 と同等）。
+export type Embed<T> = T | T[] | null | undefined
+
+// to-one 埋め込みが配列推論された場合に先頭要素を取り出す。実行時は単一オブジェクト
+// （Array.isArray=false）なので値をそのまま返し、旧挙動と完全に等価。
+export const toOne = <T>(v: Embed<T>): T | null => (Array.isArray(v) ? (v[0] ?? null) : (v ?? null))
+
 export type NearbyAgent = {
   user_id: string
   address: string

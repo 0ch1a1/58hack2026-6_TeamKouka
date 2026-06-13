@@ -1,5 +1,26 @@
 import { supabase } from '../lib/supabase'
-import type { DriverParcel, ParcelStatus } from './parcels-types'
+import { toOne } from './parcels-types'
+import type { DriverParcel, Embed, ParcelStatus } from './parcels-types'
+
+// Supabase の生の parcels 行型（配達員版）。to-one 埋め込み（delivery_companies /
+// recipient / assigned_agent）は生成型なしでは配列推論されるため Embed<T> で受ける。
+type DriverParcelRow = Omit<
+  DriverParcel,
+  'delivery_companies' | 'recipient' | 'assigned_agent'
+> & {
+  delivery_companies: Embed<{ name: string }>
+  recipient: Embed<{ full_name: string | null }>
+  assigned_agent: Embed<{ full_name: string | null }>
+}
+
+// 生の行を DriverParcel に正規化（埋め込みを toOne で単一化）。実行時は埋め込みが既に
+// 単一オブジェクトなので toOne は恒等であり、値・null 性を一切変えない no-op 正規化。
+const normalizeDriverParcel = (row: DriverParcelRow): DriverParcel => ({
+  ...row,
+  delivery_companies: toOne(row.delivery_companies),
+  recipient: toOne(row.recipient),
+  assigned_agent: toOne(row.assigned_agent),
+})
 
 // ===== 配達員（delivery_company）用 =====
 // 画面から supabase.from(...) を直叩きせず、ここに集約する（統合方針に合わせる）。
@@ -43,8 +64,8 @@ export async function fetchDriverParcels(deliveryCompanyId: string) {
 
   if (error) throw error
   // to-one 埋め込み（recipient / assigned_agent 等）は実行時単一オブジェクトだが
-  // 生成型なしでは配列推論になるため unknown 経由でキャスト（fetchMyParcels と同様）。
-  return data as unknown as DriverParcel[]
+  // 生成型なしでは配列推論になる。各行を toOne で単一化して正規化する（no-op）。
+  return ((data ?? []) as DriverParcelRow[]).map(normalizeDriverParcel)
 }
 
 // 配達開始（created → out_for_delivery）。
