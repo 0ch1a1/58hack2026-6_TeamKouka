@@ -26,6 +26,7 @@ export type Parcel = {
   // 機能6: 保管期限（delivered_to_agent 遷移時に DBトリガが自動セット）。
   storage_started_at?: string | null
   storage_deadline_at?: string | null
+  storage_overdue_notified_at?: string | null
   created_at?: string | null
   updated_at?: string | null
   // fetchMyParcels の JOIN で取得する表示名（A3拡張）

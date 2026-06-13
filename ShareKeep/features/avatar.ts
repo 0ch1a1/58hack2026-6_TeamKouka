@@ -29,10 +29,12 @@ export async function uploadAgentAvatar(userId: string, localUri: string): Promi
     .upload(path, bytes, { contentType: 'image/jpeg', upsert: true });
   if (uploadError) throw uploadError;
 
+  // update ではなく upsert にする：プロファイル未保存の新規代理人は agent_profiles 行が
+  // まだ無く、update だと 0 行マッチ（エラーなし）で avatar_url が永続化されずリロードで消える。
+  // user_id 以外は nullable / default あり（level=1, points=0 等）のため最小ペイロードで安全。
   const { error: updateError } = await supabase
     .from('agent_profiles')
-    .update({ avatar_url: path })
-    .eq('user_id', userId);
+    .upsert({ user_id: userId, avatar_url: path }, { onConflict: 'user_id' });
   if (updateError) throw updateError;
 
   return path;
