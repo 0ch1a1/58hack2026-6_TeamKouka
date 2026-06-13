@@ -5,12 +5,16 @@ import {
   StyleSheet,
   SafeAreaView,
   Animated,
+  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
-import { supabase } from '../../../lib/supabase';
+import * as Location from 'expo-location';
 import { colors } from '../../../lib/theme';
 import { ScreenHeader, Card } from '../../../components/ui';
+import { isStoredAtAgent } from '../../../lib/status';
+import { matchNearbyAgent, subscribeParcel, fetchMyParcels } from '../../../features/parcels';
+import { getCurrentUser } from '../../../features/auth';
 
 export default function MatchingScreen() {
   const { parcelId, trackingNumber } = useLocalSearchParams<{
@@ -42,21 +46,62 @@ export default function MatchingScreen() {
 
     if (!parcelId) return () => { a1.stop(); a2.stop(); a3.stop(); };
 
-    const channel = supabase
-      .channel(`parcel-matching-${parcelId}`)
-      .on(
-        'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'parcels', filter: `id=eq.${parcelId}` },
-        (payload) => {
-          if (payload.new.status === 'stored') {
-            router.replace({ pathname: '/(app)/recipient/pickup-ready', params: { parcelId } });
-          }
+    let cancelled = false;
+    let unsubscribe: (() => void) | null = null;
+
+    // 代理人が保管状態（delivered_to_agent）になったら pickup-ready へ遷移
+    const checkAndNavigate = async () => {
+      try {
+        const user = await getCurrentUser();
+        if (!user) return;
+        const parcels = await fetchMyParcels(user.id);
+        const parcel = parcels.find((p) => p.id === parcelId);
+        if (!cancelled && parcel && isStoredAtAgent(parcel.status)) {
+          router.replace({ pathname: '/(app)/recipient/pickup-ready', params: { parcelId } });
         }
-      )
-      .subscribe();
+      } catch {
+        // 状態取得に失敗してもマッチング待機画面は維持する（次の更新で再試行）
+      }
+    };
+
+    const start = async () => {
+      // 1. 受取人の現在地を取得（権限拒否時は待機画面のまま・クラッシュさせない）
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== 'granted') {
+          Alert.alert('位置情報の許可が必要です', '近くの代理人を探すために位置情報の利用を許可してください。');
+          return;
+        }
+
+        const position = await Location.getCurrentPositionAsync({});
+        if (cancelled) return;
+
+        // 2. 現在地で近くの代理人を手配
+        await matchNearbyAgent({
+          parcelId,
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+        });
+      } catch {
+        Alert.alert('エラー', '代理人の手配に失敗しました。しばらくしてからもう一度お試しください。');
+      }
+
+      if (cancelled) return;
+
+      // 3. 荷物の状態変化を購読し、保管状態になったら次の画面へ
+      unsubscribe = subscribeParcel(parcelId, () => {
+        void checkAndNavigate();
+      });
+
+      // 既に保管状態になっている可能性に備えて初回チェック
+      void checkAndNavigate();
+    };
+
+    void start();
 
     return () => {
-      supabase.removeChannel(channel);
+      cancelled = true;
+      if (unsubscribe) unsubscribe();
       a1.stop();
       a2.stop();
       a3.stop();
