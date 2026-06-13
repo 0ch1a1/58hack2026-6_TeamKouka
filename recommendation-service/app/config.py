@@ -61,6 +61,9 @@ class Settings:
     default_top_k: int = 5
     default_capacity: int = 3
     timezone: str = "Asia/Tokyo"
+    rate_limit_per_min: int = 60
+    rate_limit_burst: int = 10
+    cache_ttl_seconds: int = 30
 
 
 def _env_bool(name: str, default: bool) -> bool:
@@ -91,4 +94,7 @@ def get_settings() -> Settings:
         default_top_k=int(os.getenv("DEFAULT_TOP_K", "5")),
         default_capacity=int(os.getenv("DEFAULT_CAPACITY", "3")),
         timezone=os.getenv("APP_TIMEZONE", "Asia/Tokyo"),
+        rate_limit_per_min=int(os.getenv("RATE_LIMIT_PER_MIN", "60")),
+        rate_limit_burst=int(os.getenv("RATE_LIMIT_BURST", "10")),
+        cache_ttl_seconds=int(os.getenv("CACHE_TTL_SECONDS", "30")),
     )
