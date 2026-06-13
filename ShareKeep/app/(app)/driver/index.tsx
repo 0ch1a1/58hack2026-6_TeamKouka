@@ -43,6 +43,8 @@ export default function DriverHomeScreen() {
   const inFlightRef = useRef(false);
   // 取得のシーケンス番号。古い load の結果が新しい結果を上書きするのを防ぐ。
   const loadSeqRef = useRef(0);
+  // 初回 focus は useEffect 側の初期ロードに任せ、二重取得を避ける。
+  const firstFocusRef = useRef(true);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -50,13 +52,6 @@ export default function DriverHomeScreen() {
       mountedRef.current = false;
     };
   }, []);
-
-  // 画面が focus する度にナビゲーションロックを解放（match/scan で遷移→戻った時に再操作可能に）。
-  useFocusEffect(
-    useCallback(() => {
-      inFlightRef.current = false;
-    }, []),
-  );
 
   const load = useCallback(async () => {
     const seq = ++loadSeqRef.current;
@@ -77,6 +72,19 @@ export default function DriverHomeScreen() {
       if (mountedRef.current) setLoading(false);
     })();
   }, [load]);
+
+  // 画面が focus する度に: ナビゲーションロックを解放 + 2回目以降は再取得。
+  // agents（割り当て）/ scan（受け渡し）から戻った時に最新 status を反映する。
+  useFocusEffect(
+    useCallback(() => {
+      inFlightRef.current = false;
+      if (firstFocusRef.current) {
+        firstFocusRef.current = false;
+        return;
+      }
+      load();
+    }, [load]),
+  );
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);

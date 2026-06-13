@@ -101,11 +101,11 @@ export default function AgentParcelsScreen() {
     }
   };
 
-  // 配達員から荷物を受領（agent_assigned → delivered_to_agent）。
-  // ShareKeep には配達員が agentQR をスキャンする画面が無いため、代理人自身が
-  // この導線でステータスを進める（B8）。これで受取人側 matching の subscribeParcel が
-  // 発火し pickup-ready へ進める。副作用（ポイント/CO2）は後段の verifyRecipientQr で付くため、
-  // ここで updateParcelStatus を使っても報酬計算は壊れない（A0 確認済み）。
+  // 【デモ用フォールバック】配達員から荷物を受領（agent_assigned → delivered_to_agent）。
+  // 本来の導線は配達員側の QR スキャン画面（driver/scan.tsx, verify-agent-qr）。
+  // それが使えない場面のデモ保険として代理人自身がこの導線でステータスを進める。
+  // 受取人側 matching の subscribeParcel が発火し pickup-ready へ進む。副作用（ポイント/CO2）は
+  // 後段の verifyRecipientQr で付くため、ここで updateParcelStatus を使っても報酬計算は壊れない（A0 確認済み）。
   const handleReceive = async (parcel: MatchedParcel) => {
     try {
       await updateParcelStatus(parcel.parcelId, 'delivered_to_agent');
@@ -190,7 +190,7 @@ export default function AgentParcelsScreen() {
               {item.parcelStatus === 'agent_assigned' ? (
                 <TouchableOpacity style={styles.receiveButton} onPress={() => handleReceive(item)}>
                   <Ionicons name="cube" size={16} color="#FFFFFF" />
-                  <Text style={styles.receiveButtonText}>配達員から受領</Text>
+                  <Text style={styles.receiveButtonText}>デモ用: 受領済みにする</Text>
                 </TouchableOpacity>
               ) : (
                 <View style={styles.actionRow}>
