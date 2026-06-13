@@ -2,23 +2,17 @@ from __future__ import annotations
 
 import argparse
 from datetime import datetime, timedelta
-from math import exp
 from pathlib import Path
-from zoneinfo import ZoneInfo
 
 import numpy as np
 import pandas as pd
 
 from app.config import SERVICE_ROOT
 from app.features import FEATURE_NAMES, build_features
+from app.utils import TOKYO_TZ, sigmoid
 
 
-TOKYO_TZ = ZoneInfo("Asia/Tokyo")
 DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
-
-
-def _sigmoid(value: float) -> float:
-    return 1.0 / (1.0 + exp(-value))
 
 
 def _time_string(minutes: int) -> str:
@@ -79,7 +73,7 @@ def generate(n: int, seed: int) -> pd.DataFrame:
             + 0.02 * features["is_weekend"] * features["day_match"]
             - 0.03 * features["is_evening"] * (1.0 - features["time_score"])
         )
-        probability = _sigmoid((utility - 0.56) * 6.5 + float(rng.normal(0, 0.65)))
+        probability = sigmoid((utility - 0.56) * 6.5 + float(rng.normal(0, 0.65)))
         label = int(rng.random() < probability)
 
         rows.append(

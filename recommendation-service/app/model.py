@@ -1,14 +1,15 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from math import exp
 from pathlib import Path
 from typing import Any
 
 import joblib
 import numpy as np
 
+from app.config import FALLBACK_SCORE_BIAS, FALLBACK_SCORE_SCALE
 from app.features import FEATURE_NAMES, features_to_row
+from app.utils import sigmoid
 
 
 FALLBACK_WEIGHTS = {
@@ -40,8 +41,8 @@ class Prediction:
     breakdown: dict[str, float]
 
 
-def _sigmoid(value: float) -> float:
-    return 1.0 / (1.0 + exp(-value))
+# 後方互換のためのエイリアス (旧 `app.model._sigmoid` 参照を維持)。
+_sigmoid = sigmoid
 
 
 class RecommendationModel:
@@ -80,7 +81,7 @@ class RecommendationModel:
                 for name in FEATURE_NAMES
             }
             weighted_sum = sum(contributions.values())
-            score = _sigmoid((weighted_sum - 0.5) * 4.0)
+            score = sigmoid((weighted_sum - FALLBACK_SCORE_BIAS) * FALLBACK_SCORE_SCALE)
             predictions.append(
                 Prediction(
                     score=float(score),

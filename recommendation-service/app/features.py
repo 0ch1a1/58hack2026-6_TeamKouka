@@ -2,12 +2,34 @@ from __future__ import annotations
 
 from datetime import datetime, time
 from typing import Any
-from zoneinfo import ZoneInfo
 
+from app.config import (
+    DISTANCE_MAX_M,
+    EVENING_START_MINUTE,
+    EXPERIENCE_MAX_DELIVERIES,
+    LEVEL_SCORE_RANGE,
+    MINUTES_PER_DAY,
+    TIME_SCORE_CENTER_DECAY,
+    TIME_SCORE_OUT_OF_WINDOW,
+    TIME_SCORE_WINDOW_FLOOR,
+    WEEKEND_WEEKDAY_THRESHOLD,
+)
+from app.utils import TOKYO_TZ, clamp
 
-TOKYO_TZ = ZoneInfo("Asia/Tokyo")
-DISTANCE_MAX_M = 2000.0
-EXPERIENCE_MAX_DELIVERIES = 20.0
+# 後方互換: 既存 import (`from app.features import DISTANCE_MAX_M` 等) を維持。
+__all__ = [
+    "DISTANCE_MAX_M",
+    "EXPERIENCE_MAX_DELIVERIES",
+    "TOKYO_TZ",
+    "FEATURE_NAMES",
+    "DAY_ALIASES",
+    "clamp",
+    "calculate_time_score",
+    "normalize_weekdays",
+    "calculate_day_match",
+    "build_features",
+    "features_to_row",
+]
 
 FEATURE_NAMES = [
     "distance_score",
@@ -70,10 +92,6 @@ DAY_ALIASES = {
 }
 
 
-def clamp(value: float, low: float = 0.0, high: float = 1.0) -> float:
-    return max(low, min(high, value))
-
-
 def _get(raw: Any, key: str, default: Any = None) -> Any:
     if isinstance(raw, dict):
         return raw.get(key, default)
@@ -106,16 +124,16 @@ def _parse_time(value: Any) -> int | None:
             return None
         hour = int(parts[0])
         minute = int(parts[1])
-        return int(clamp(hour * 60 + minute, 0, 1439))
+        return int(clamp(hour * 60 + minute, 0, MINUTES_PER_DAY - 1))
     return None
 
 
 def _minutes_in_window(now_minute: int, start: int, end: int) -> tuple[bool, int]:
     if start == end:
-        return True, 1440
+        return True, MINUTES_PER_DAY
     if start < end:
         return start <= now_minute <= end, end - start
-    return now_minute >= start or now_minute <= end, (1440 - start) + end
+    return now_minute >= start or now_minute <= end, (MINUTES_PER_DAY - start) + end
 
 
 def _position_in_window(now_minute: int, start: int, end: int) -> int:
@@ -123,7 +141,7 @@ def _position_in_window(now_minute: int, start: int, end: int) -> int:
         return now_minute - start
     if now_minute >= start:
         return now_minute - start
-    return (1440 - start) + now_minute
+    return (MINUTES_PER_DAY - start) + now_minute
 
 
 def calculate_time_score(start_time: Any, end_time: Any, now: datetime) -> float:
@@ -135,14 +153,18 @@ def calculate_time_score(start_time: Any, end_time: Any, now: datetime) -> float
     now_minute = now.hour * 60 + now.minute
     in_window, length = _minutes_in_window(now_minute, start, end)
     if not in_window:
-        return 0.15
-    if length <= 0 or length >= 1440:
+        return TIME_SCORE_OUT_OF_WINDOW
+    if length <= 0 or length >= MINUTES_PER_DAY:
         return 1.0
 
     position = _position_in_window(now_minute, start, end)
     center = length / 2.0
     distance_from_center = abs(position - center)
-    return clamp(1.0 - 0.5 * (distance_from_center / center), 0.5, 1.0)
+    return clamp(
+        1.0 - TIME_SCORE_CENTER_DECAY * (distance_from_center / center),
+        TIME_SCORE_WINDOW_FLOOR,
+        1.0,
+    )
 
 
 def _day_tokens(value: Any) -> list[str]:
@@ -200,10 +222,10 @@ def build_features(
         ),
         "day_match": calculate_day_match(_get(raw, "available_days"), local_now),
         "experience": clamp(completed_deliveries / EXPERIENCE_MAX_DELIVERIES),
-        "level_score": clamp((level - 1.0) / 4.0),
+        "level_score": clamp((level - 1.0) / LEVEL_SCORE_RANGE),
         "capacity_score": clamp(1.0 - active_load / safe_capacity),
-        "is_weekend": 1.0 if local_now.weekday() >= 5 else 0.0,
-        "is_evening": 1.0 if now_minute >= 18 * 60 else 0.0,
+        "is_weekend": 1.0 if local_now.weekday() >= WEEKEND_WEEKDAY_THRESHOLD else 0.0,
+        "is_evening": 1.0 if now_minute >= EVENING_START_MINUTE else 0.0,
     }
     return {name: float(features[name]) for name in FEATURE_NAMES}
 
