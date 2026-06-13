@@ -16,7 +16,7 @@ import QRCode from 'react-native-qrcode-svg';
 import { supabase } from '../../../lib/supabase';
 import { colors } from '../../../lib/theme';
 import { ScreenHeader, Card } from '../../../components/ui';
-import { generateQrToken, verifyRecipientQr } from '../../../features/parcels';
+import { generateQrToken, verifyRecipientQr, updateParcelStatus } from '../../../features/parcels';
 
 type MatchedParcel = {
   matchId: string;
@@ -24,6 +24,7 @@ type MatchedParcel = {
   trackingNo: string;
   recipientName: string;
   status: string;
+  parcelStatus: string | null;
   qrToken: string | null;
 };
 
@@ -60,6 +61,7 @@ export default function AgentParcelsScreen() {
       trackingNo: m.parcels?.tracking_no ?? '—',
       recipientName: m.profiles?.full_name ?? '不明',
       status: m.status ?? 'matched',
+      parcelStatus: m.parcels?.status ?? null,
       qrToken: null,
     }));
 
@@ -96,6 +98,21 @@ export default function AgentParcelsScreen() {
       setQrParcel({ ...parcel, qrToken: token });
     } catch {
       Alert.alert('エラー', 'QRコードの生成に失敗しました。');
+    }
+  };
+
+  // 配達員から荷物を受領（agent_assigned → delivered_to_agent）。
+  // ShareKeep には配達員が agentQR をスキャンする画面が無いため、代理人自身が
+  // この導線でステータスを進める（B8）。これで受取人側 matching の subscribeParcel が
+  // 発火し pickup-ready へ進める。副作用（ポイント/CO2）は後段の verifyRecipientQr で付くため、
+  // ここで updateParcelStatus を使っても報酬計算は壊れない（A0 確認済み）。
+  const handleReceive = async (parcel: MatchedParcel) => {
+    try {
+      await updateParcelStatus(parcel.parcelId, 'delivered_to_agent');
+      await fetchParcels();
+      Alert.alert('受領しました', '荷物を保管中にしました。受取人が受け取りに来られます。');
+    } catch {
+      Alert.alert('エラー', '受領処理に失敗しました。');
     }
   };
 
@@ -170,16 +187,23 @@ export default function AgentParcelsScreen() {
                 <Text style={styles.metaText}>受取人: {item.recipientName}</Text>
               </View>
 
-              <View style={styles.actionRow}>
-                <TouchableOpacity style={styles.qrButton} onPress={() => handleShowQR(item)}>
-                  <Ionicons name="qr-code-outline" size={16} color={colors.green} />
-                  <Text style={styles.qrButtonText}>配達員用QR</Text>
+              {item.parcelStatus === 'agent_assigned' ? (
+                <TouchableOpacity style={styles.receiveButton} onPress={() => handleReceive(item)}>
+                  <Ionicons name="cube" size={16} color="#FFFFFF" />
+                  <Text style={styles.receiveButtonText}>配達員から受領</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.scanButton} onPress={() => handleOpenScanner(item)}>
-                  <Ionicons name="scan-outline" size={16} color="#FFFFFF" />
-                  <Text style={styles.scanButtonText}>受取人QRスキャン</Text>
-                </TouchableOpacity>
-              </View>
+              ) : (
+                <View style={styles.actionRow}>
+                  <TouchableOpacity style={styles.qrButton} onPress={() => handleShowQR(item)}>
+                    <Ionicons name="qr-code-outline" size={16} color={colors.green} />
+                    <Text style={styles.qrButtonText}>配達員用QR</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.scanButton} onPress={() => handleOpenScanner(item)}>
+                    <Ionicons name="scan-outline" size={16} color="#FFFFFF" />
+                    <Text style={styles.scanButtonText}>受取人QRスキャン</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
             </Card>
           )}
           ListEmptyComponent={
@@ -243,6 +267,8 @@ const styles = StyleSheet.create({
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   metaText: { fontSize: 13, color: '#6B7280' },
   actionRow: { flexDirection: 'row', gap: 8 },
+  receiveButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 10, borderRadius: 10, backgroundColor: colors.green },
+  receiveButtonText: { fontSize: 13, fontWeight: '600', color: '#FFFFFF' },
   qrButton: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 10, borderRadius: 10, borderWidth: 1.5, borderColor: colors.green },
   qrButtonText: { fontSize: 13, fontWeight: '600', color: colors.green },
   scanButton: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 10, borderRadius: 10, backgroundColor: colors.green },

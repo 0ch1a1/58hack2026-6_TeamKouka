@@ -30,16 +30,24 @@ export default function DeliveryCompleteScreen() {
 
     const fetchData = async () => {
       try {
+        const { data: { user } } = await supabase.auth.getUser();
+
+        // point_transactions には feature 関数がないため直接読みのまま残置。
+        // RLS が無い前提でも他人のポイントを表示しないよう user_id で必ず絞る（B4 バグ修正）。
+        // 報酬の付与先は代理人（transaction_type='proxy_delivery_complete'）であり、
+        // 受取人自身の行は通常0件になりうる点に注意。
         const [parcel, pointRes] = await Promise.all([
           fetchParcel(parcelId),
-          // point_transactions には feature 関数がないため直接読みのまま残置
-          supabase
-            .from('point_transactions')
-            .select('points')
-            .eq('transaction_type', 'delivery_complete')
-            .order('created_at', { ascending: false })
-            .limit(1)
-            .maybeSingle(),
+          user
+            ? supabase
+                .from('point_transactions')
+                .select('points')
+                .eq('user_id', user.id)
+                .eq('transaction_type', 'proxy_delivery_complete')
+                .order('created_at', { ascending: false })
+                .limit(1)
+                .maybeSingle()
+            : Promise.resolve({ data: null }),
         ]);
 
         setResult({

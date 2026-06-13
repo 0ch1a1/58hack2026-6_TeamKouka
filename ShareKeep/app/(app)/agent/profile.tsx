@@ -42,10 +42,11 @@ export default function AgentProfileScreen() {
         .maybeSingle();
 
       if (data) {
-        const parts = (data.address ?? '').split('|');
-        setPostalCode(parts[0] ?? '');
-        setAddress(parts[1] ?? '');
-        setRoomNumber(parts[2] ?? '');
+        // geocode-agent-address は address（ジオコ結果の display_name で上書き）と
+        // address_detail（部屋番号等）を分けて保存する。旧 '郵便番号|住所|部屋' 連結は廃止。
+        // 郵便番号は display_name から確実に復元できないため、住所欄は保存済み address をそのまま表示する。
+        setAddress(data.address ?? '');
+        setRoomNumber(data.address_detail ?? '');
         setSelectedDays((data.available_days ?? []) as Day[]);
         setTimeFrom(data.start_time?.slice(0, 5) ?? '');
         setTimeTo(data.end_time?.slice(0, 5) ?? '');
@@ -80,12 +81,16 @@ export default function AgentProfileScreen() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { setSaving(false); return; }
 
-    const fullAddress = [postalCode, address, roomNumber].join('|');
+    // geocode-agent-address は Nominatim に単一住所文字列 q=address を投げるため、
+    // ジオコ可能な「郵便番号＋住所本体」のみを address に渡し、部屋番号等は addressDetail に分離する。
+    // '郵便番号|住所|部屋' を連結したまま渡すとジオコに失敗するため（A0 確認事項）。
+    const geocodeAddress = [postalCode, address].filter(Boolean).join(' ');
 
     try {
       await geocodeAgentAddress({
         userId: user.id,
-        address: fullAddress,
+        address: geocodeAddress,
+        addressDetail: roomNumber || undefined,
         availableDays: selectedDays,
         startTime: timeFrom,
         endTime: timeTo,
@@ -97,6 +102,9 @@ export default function AgentProfileScreen() {
     }
 
     if (emergencyContact) {
+      // 緊急連絡先（電話番号）のみの部分更新。upsertProfile は role/fullName が必須で、
+      // ここでは未保持のため使うと既存値を上書きしてしまう。RLS は自分の行更新を許可するため
+      // phone だけの直 update を意図的に維持する（B6）。
       await supabase.from('profiles').update({ phone: emergencyContact }).eq('id', user.id);
     }
 
