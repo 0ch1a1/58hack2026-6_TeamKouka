@@ -23,6 +23,9 @@ export type Parcel = {
   status: ParcelStatus | string
   retry_count?: number | null
   co2_saved_kg?: number | string | null
+  // 機能6: 保管期限（delivered_to_agent 遷移時に DBトリガが自動セット）。
+  storage_started_at?: string | null
+  storage_deadline_at?: string | null
   created_at?: string | null
   updated_at?: string | null
   // fetchMyParcels の JOIN で取得する表示名（A3拡張）
@@ -75,6 +78,8 @@ export async function fetchMyParcels(userId: string) {
       status,
       retry_count,
       co2_saved_kg,
+      storage_started_at,
+      storage_deadline_at,
       created_at,
       updated_at,
       delivery_companies(name),
@@ -104,6 +109,8 @@ export async function fetchParcel(parcelId: string) {
       status,
       retry_count,
       co2_saved_kg,
+      storage_started_at,
+      storage_deadline_at,
       created_at,
       updated_at,
       delivery_companies(name),
@@ -149,6 +156,8 @@ export async function fetchDriverParcels(deliveryCompanyId: string) {
       status,
       retry_count,
       co2_saved_kg,
+      storage_started_at,
+      storage_deadline_at,
       created_at,
       updated_at,
       delivery_companies(name),
