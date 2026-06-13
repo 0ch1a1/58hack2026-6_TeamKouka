@@ -117,7 +117,7 @@ export default function SignUpScreen() {
           label="登録する"
           onPress={handleSignUp}
           loading={loading}
-          style={{ height: 52, width: '100%', marginTop: 8, borderRadius: 12 }}
+          style={styles.primaryButton}
         />
 
         <View style={styles.footer}>
@@ -164,4 +164,5 @@ const styles = StyleSheet.create({
   linkText: { fontSize: 14, fontWeight: '600', color: colors.green },
   driverLink: { marginTop: 32 },
   driverLinkText: { fontSize: 12, color: colors.grayLight, textDecorationLine: 'underline' },
+  primaryButton: { height: 52, width: '100%', marginTop: 8, borderRadius: 12 },
 });
