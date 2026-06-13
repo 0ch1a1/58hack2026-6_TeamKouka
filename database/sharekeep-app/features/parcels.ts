@@ -107,7 +107,14 @@ export async function verifyAgentQr(token: string) {
     body: { token },
   })
 
-  if (error) throw error
+  if (error) {
+    throw new Error(getFunctionErrorMessage(error, data))
+  }
+
+  if (isFunctionFailure(data)) {
+    throw new Error(String(data.error ?? 'Agent QR verification failed'))
+  }
+
   return data as { success: boolean; error?: unknown }
 }
 
@@ -116,8 +123,34 @@ export async function verifyRecipientQr(token: string) {
     body: { token },
   })
 
-  if (error) throw error
+  if (error) {
+    throw new Error(getFunctionErrorMessage(error, data))
+  }
+
+  if (isFunctionFailure(data)) {
+    throw new Error(String(data.error ?? 'Recipient QR verification failed'))
+  }
+
   return data as { success: boolean; error?: unknown }
+}
+
+function isFunctionFailure(data: unknown): data is { success: false; error?: unknown } {
+  return (
+    typeof data === 'object' &&
+    data !== null &&
+    'success' in data &&
+    (data as { success?: unknown }).success === false
+  )
+}
+
+function getFunctionErrorMessage(error: unknown, data: unknown) {
+  if (data && typeof data === 'object' && 'error' in data) {
+    return String((data as { error: unknown }).error)
+  }
+
+  if (error instanceof Error) return error.message
+
+  return String(error)
 }
 
 export async function findNearbyAgents(params: {
