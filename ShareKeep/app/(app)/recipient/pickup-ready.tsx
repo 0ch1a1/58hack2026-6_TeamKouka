@@ -10,9 +10,11 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import QRCode from 'react-native-qrcode-svg';
 import { supabase, getDeliveryMatch } from '../../../lib/supabase';
+import { generateQrToken, subscribeParcel } from '../../../features/parcels';
+import { isHandedOff } from '../../../lib/status';
 import { colors, radius } from '../../../lib/theme';
 import { ScreenHeader, PrimaryButton, Card, InfoRow } from '../../../components/ui';
 
@@ -35,13 +37,12 @@ export default function PickupReadyScreen() {
     if (!parcelId) { setLoading(false); return; }
 
     const fetchData = async () => {
-      // 代理人(JOIN) / 追跡番号 / 引き渡しQRは parcelId だけで引けて互いに独立なので並列取得
+      // 代理人(JOIN) / 追跡番号は parcelId だけで引けて互いに独立なので並列取得
       const [
         { data: match, error: matchError },
         { data: parcel },
-        { data: token },
       ] = await Promise.all([
-        // delivery_matches から代理人を取得（agent_id で profiles を JOIN）
+        // delivery_matches から代理人を取得（agent_id で profiles を JOIN・A7 許可）
         getDeliveryMatch(parcelId),
         // 追跡番号を parcels から取得
         supabase
@@ -49,19 +50,27 @@ export default function PickupReadyScreen() {
           .select('tracking_no')
           .eq('id', parcelId)
           .maybeSingle(),
-        // 引き渡し確認QR（受取人提示用トークン）を取得
-        supabase
-          .from('qr_tokens')
-          .select('token')
-          .eq('parcel_id', parcelId)
-          .eq('qr_type', 'recipient')
-          .eq('used', false)
-          .gt('expires_at', new Date().toISOString())
-          .maybeSingle(),
       ]);
 
       setTrackingNo((parcel as any)?.tracking_no ?? '—');
-      setQrToken((token as any)?.token ?? parcelId);
+
+      // 引き渡し確認QR（受取人提示用トークン）を features 経由で生成
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const token = await generateQrToken({
+            parcelId,
+            userId: user.id,
+            qrType: 'recipient',
+          });
+          setQrToken(token ?? parcelId);
+        } else {
+          setQrToken(parcelId);
+        }
+      } catch {
+        // QR 生成失敗時はフォールバックとして parcelId を表示（旧挙動踏襲）
+        setQrToken(parcelId);
+      }
 
       if (matchError || !match) {
         Alert.alert('エラー', '代理人情報の取得に失敗しました。');
@@ -94,6 +103,22 @@ export default function PickupReadyScreen() {
     };
 
     fetchData();
+
+    // 引き渡し完了（handed_to_recipient / completed）になったら受取完了画面へ遷移
+    const unsubscribe = subscribeParcel(parcelId, async () => {
+      const { data } = await supabase
+        .from('parcels')
+        .select('status')
+        .eq('id', parcelId)
+        .maybeSingle();
+      if (isHandedOff((data as any)?.status)) {
+        router.replace({ pathname: '/(app)/recipient/delivery-complete', params: { parcelId } });
+      }
+    });
+
+    return () => {
+      unsubscribe();
+    };
   }, [parcelId]);
 
   const handleGoNow = () => {
