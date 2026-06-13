@@ -28,10 +28,11 @@ spec:
                 name: recommendation-config
             - secretRef:
                 name: recommendation-secrets
-          # /health はモデル未ロードでも 200（fallback）を返すため liveness/readiness に使える
+          # readiness は /ready（必須env未設定/プレースホルダなら 503 → Ready にしない）。
+          # liveness は /health（プロセス生存のみ。env不備で再起動ループさせない）。
           readinessProbe:
             httpGet:
-              path: /health
+              path: /ready
               port: 8000
             initialDelaySeconds: 5
             periodSeconds: 10

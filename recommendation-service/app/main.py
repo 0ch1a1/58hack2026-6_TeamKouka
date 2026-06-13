@@ -125,6 +125,34 @@ def health() -> HealthResponse:
     )
 
 
+def _placeholder(value: str | None) -> bool:
+    # secret.yaml.template / configmap.yaml の REPLACE_WITH_* が差し替えられず残っている状態
+    return not value or "REPLACE_WITH" in value
+
+
+@app.get("/ready")
+def ready() -> dict[str, bool]:
+    """readiness 用。必須 env が未設定/プレースホルダのままなら 503。
+
+    /health（liveness）はプロセス生存のみを見るため常に 200 だが、ダミー値の
+    Secret/ConfigMap で起動すると "Ready なのに /recommend は失敗" になる。
+    それを防ぐため readinessProbe はこちらを使い、設定不備では Ready にしない。
+    """
+    missing = []
+    if _placeholder(settings.supabase_url):
+        missing.append("SUPABASE_URL")
+    if _placeholder(settings.supabase_service_role_key):
+        missing.append("SUPABASE_SERVICE_ROLE_KEY")
+    if settings.require_auth and _placeholder(settings.supabase_anon_key):
+        missing.append("SUPABASE_ANON_KEY")
+    if missing:
+        raise HTTPException(
+            status_code=503,
+            detail=f"not ready: missing or placeholder env: {', '.join(missing)}",
+        )
+    return {"ready": True}
+
+
 @app.post("/recommend", response_model=RecommendResponse)
 def recommend(
     request: RecommendRequest,

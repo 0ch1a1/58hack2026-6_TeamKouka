@@ -135,7 +135,8 @@ EXPO_PUBLIC_RECOMMENDATION_URL=http://<PCのLAN IP>:8000
 
 ## Part C. ローカル Kubernetes に載せる（発表用の上積み）
 
-manifests は `k8s/recommendation/` に用意済み（`namespace / secret.example / configmap / deployment / service`）。
+manifests は `k8s/recommendation/` に用意済み（`namespace / secret.yaml.template / configmap / deployment / service`）。
+`secret.yaml.template` は `kubectl apply -f` の対象にならない拡張子（ダミー値の誤適用防止）。
 
 ### C1. ローカルクラスタ準備
 `kind` の例：
@@ -155,7 +156,7 @@ kind load docker-image sharekeep-recommendation:local --name sharekeep
 （**リポジトリルートから**。B で `recommendation-service/` にいる場合は先に `cd ..`）
 ```bash
 cd k8s/recommendation
-cp secret.example.yaml secret.yaml   # secret.yaml は .gitignore 済み
+cp secret.yaml.template secret.yaml   # secret.yaml は .gitignore 済み
 # secret.yaml の REPLACE_… を service_role / ADMIN_API_KEY に置換
 ```
 configmap.yaml の `SUPABASE_ANON_KEY` の `REPLACE_WITH_PUBLISHABLE_KEY` も実値に置換。
@@ -174,7 +175,8 @@ kubectl apply -f service.yaml
 kubectl get pods -n sharekeep
 kubectl logs deploy/recommendation-api -n sharekeep
 ```
-→ `recommendation-api-…` が `Running`、readinessProbe(/health) が通ること。
+→ `recommendation-api-…` が `Running` かつ `READY 1/1`。
+`READY 0/1` のままなら env がプレースホルダ／未設定（readinessProbe `/ready` が 503）。`kubectl logs` と configmap/secret の値を確認。
 
 ### C6. port-forward して確認
 `port-forward` は**フォアグラウンドで動き続ける**（ブロックする）ため、**専用ターミナル**で起動し、`curl` は別ターミナルで実行する。
