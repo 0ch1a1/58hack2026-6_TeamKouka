@@ -12,27 +12,31 @@
 | バックエンド | `recommendation-service/`（FastAPI + scikit-learn） | ✅ 生成・契約レビュー済み（**未デプロイ**） |
 | デモデータ | `ShareKeep/scripts/{seed,unseed}-agents.ts` | ✅ 生成・契約レビュー済み（**未実行**） |
 | 設計 | `maki-docs/recommendation-api.md` | ✅ 実スキーマ基準で更新済み |
-| クライアント連携 | `ShareKeep/features/recommend.ts` ＋ UI | ❌ **未着手** |
+| クライアント連携 | `ShareKeep/features/recommend.ts` ＋ 選択UI | ✅ **実装済み**（型チェックは `npm install` 後に各自で） |
 
 DB契約は検証済み：`recommendation-service` の RPC 呼び出し・`recommendation_logs` 挿入列は migration と一致。
 `get_recipient_coordinates` RPC は後から migration に追加して整合済み。
 
-## 🤖 残実装（次の Claude がやる ＝ worktree 内で完結）
+## ✅ 実装済み（このセッションで完了 ＝ worktree 内で完結）
 
-1. **`ShareKeep/features/recommend.ts`** を新規作成
-   - `recommendAgents({ parcelId?, recipientId?, latitude?, longitude?, radiusMeters?, topK? })`
-     → `fetch(`${EXPO_PUBLIC_RECOMMENDATION_URL}/recommend`, ...)`。レスポンス型は recommendation-service の `RecommendResponse`/`RecommendationItem` に合わせる
-   - `markRecommendationChosen(parcelId, agentId)` → `supabase.rpc('mark_recommendation_chosen', { p_parcel_id, p_agent_id })`
-   - 既存 `features/parcels.ts` の流儀（async関数＋`supabase` import）に合わせる
-2. **受取人の中間者選択UI**（`app/(app)/recipient/matching.tsx` 付近）
-   - `recommendAgents` を呼び、スコア降順で候補表示＋**内訳バー**（`breakdown`）＋`reasons`
-   - 確定時に既存 `assignAgentToParcel` ＋ `markRecommendationChosen` を呼ぶ
-3. **受取人住所の登録導線**（距離の起点 `recipient_profiles` を埋める。詳細は recommendation-api.md §1.5）
-   - geocode Edge Function の受取人版（`geocode-agent-address` を流用 or 汎用化）
-   - サインアップ/設定画面に住所入力 → `upsert_recipient_profile` RPC
-   - 代替：当面は端末GPS（`expo-location`）で `latitude/longitude` を直接 `/recommend` に渡す簡易版でも可
-4. **`ShareKeep/lib/database.types.ts`** に `RecipientProfile` / `RecommendationLog` 型を追記
-5. `EXPO_PUBLIC_RECOMMENDATION_URL` を `.env`（と型）に追加
+1. **`ShareKeep/features/recommend.ts`** 新規作成
+   - `recommendAgents({ parcelId?, recipientId?, latitude?, longitude?, radiusMeters?, topK?, targetAt? })`
+     → `fetch(${EXPO_PUBLIC_RECOMMENDATION_URL}/recommend)`。型は recommendation-service の `RecommendResponse`/`RecommendationItem` に一致
+   - `markRecommendationChosen(parcelId, agentId)` → `supabase.rpc('mark_recommendation_chosen', ...)`
+   - `isRecommendationEnabled()`（URL 未設定判定。UI のフォールバック分岐に使用）
+2. **受取人の中間者選択UI**（`app/(app)/recipient/matching.tsx` を改修）
+   - GPS取得 → `recommendAgents` 呼び出し → スコア降順カードリスト（**内訳バー** `breakdown` ＋ `reasons` タグ）
+   - 確定で `assignAgentToParcel`（`distance_meters` 付き）＋ `markRecommendationChosen`（best-effort）→ 保管状態を購読し pickup-ready へ
+   - **フォールバック**：URL未設定／取得失敗／候補ゼロ時は従来の自動マッチ `matchNearbyAgent` ＋待機演出に自動で切替（＝サービス未デプロイでもデモが止まらない）
+3. **`ShareKeep/lib/database.types.ts`** に `RecipientProfile` / `RecommendationLog` 型を追記
+4. `EXPO_PUBLIC_RECOMMENDATION_URL` を `ShareKeep/.env.example` に追加（`EXPO_PUBLIC_` プレフィックスのため型は expo が自動付与）
+
+## 🤖 残実装（任意・優先度低）
+
+- **受取人住所の登録導線**（距離の起点 `recipient_profiles` を埋める。recommendation-api.md §1.5）
+  - 現状は **端末GPS（`expo-location`）で `latitude/longitude` を直接 `/recommend` に渡す簡易版**を採用（doc記載の代替案）。
+  - より正確にするなら geocode Edge Function の受取人版（`geocode-agent-address` 流用/汎用化）＋ サインアップ/設定で住所入力 → `upsert_recipient_profile` RPC。
+- **型チェック/テスト**：worktree に `node_modules` 未導入のため未実行。`cd ShareKeep && npm install && npm test` で各自確認。
 
 ## 👤 あなた（権限・キー・インフラ）
 
