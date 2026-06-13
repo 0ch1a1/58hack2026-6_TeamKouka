@@ -95,3 +95,29 @@ export interface DeliveryCompany {
   name: string;
   created_at: string;
 }
+
+// 受取人の自宅座標（距離の起点 / agent_profiles と対称）。
+// migration 20260613140000_recommendation.sql の recipient_profiles に対応。
+export interface RecipientProfile {
+  user_id: string;
+  address: string | null;
+  address_detail: string | null;
+  location: unknown | null; // geography(Point,4326)。型は不透明（AgentProfile.location と同じ扱い）
+  updated_at: string;
+}
+
+// 推薦結果ログ（特徴量・スコア・選択/成否ラベル＝再学習の教師データ）。
+// 書込は service_role(Python サービス)、選択ラベルは mark_recommendation_chosen で更新。
+export interface RecommendationLog {
+  id: string;
+  parcel_id: string | null;
+  recipient_id: string | null;
+  candidate_agent_id: string | null;
+  features: Record<string, unknown>;
+  score: number | null;
+  rank: number | null;
+  model_version: string | null;
+  chosen: boolean;
+  outcome: string | null; // 'completed' | 'failed' | null
+  created_at: string;
+}
