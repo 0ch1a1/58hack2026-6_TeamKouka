@@ -1,0 +1,50 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: recommendation-api
+  namespace: sharekeep
+  labels:
+    app: recommendation-api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: recommendation-api
+  template:
+    metadata:
+      labels:
+        app: recommendation-api
+    spec:
+      containers:
+        - name: recommendation-api
+          # ローカル(kind/Docker Desktop)では `kind load docker-image` 等で読み込んだ
+          # ローカルイメージを使うため IfNotPresent。CI/CD導入時は ghcr.io の tag に差し替える。
+          image: sharekeep-recommendation:local
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8000
+          envFrom:
+            - configMapRef:
+                name: recommendation-config
+            - secretRef:
+                name: recommendation-secrets
+          # /health はモデル未ロードでも 200（fallback）を返すため liveness/readiness に使える
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"

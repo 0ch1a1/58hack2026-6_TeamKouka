@@ -1,1 +1,4 @@
 WORK_LOG.md
+
+# Kubernetes 実値 secret（テンプレート secret.example.yaml のみコミット）
+k8s/**/secret.yaml

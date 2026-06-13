@@ -1,0 +1,18 @@
+# 非秘密の設定値。SUPABASE_ANON_KEY は公開鍵（publishable）なので ConfigMap でよい。
+# SUPABASE_URL / SUPABASE_ANON_KEY はアプリ(ShareKeep/.env)と同じ値を入れる。
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: recommendation-config
+  namespace: sharekeep
+data:
+  SUPABASE_URL: "https://zbmrmblakoszzecdnptn.supabase.co"
+  # アプリの EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY と同じ公開鍵を入れる（JWT検証に使用）
+  SUPABASE_ANON_KEY: "REPLACE_WITH_PUBLISHABLE_KEY"
+  # /recommend・/feedback に JWT を必須化（本番/デモは true 推奨。ローカルcurl検証時のみ false）
+  RECOMMENDATION_REQUIRE_AUTH: "true"
+  MODEL_PATH: "models/model.joblib"
+  DEFAULT_RADIUS_M: "2000"
+  DEFAULT_TOP_K: "5"
+  DEFAULT_CAPACITY: "3"
+  APP_TIMEZONE: "Asia/Tokyo"

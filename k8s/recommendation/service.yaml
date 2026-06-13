@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: recommendation-api
+  namespace: sharekeep
+  labels:
+    app: recommendation-api
+spec:
+  type: ClusterIP
+  selector:
+    app: recommendation-api
+  ports:
+    - name: http
+      port: 8000
+      targetPort: 8000
+# 公開はローカルでは port-forward を使う:
+#   kubectl port-forward svc/recommendation-api 8000:8000 -n sharekeep
