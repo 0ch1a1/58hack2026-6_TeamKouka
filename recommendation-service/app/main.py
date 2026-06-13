@@ -1,19 +1,19 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from typing import Any
-
 from fastapi import FastAPI, HTTPException
 
 from app.config import get_settings
-from app.features import build_features
-from app.model import RecommendationModel, build_reasons
+from app.model import RecommendationModel
+from app.recommendation_service import (
+    CandidateFetchError,
+    LogPersistError,
+    RecommendationService,
+)
 from app.schemas import (
     FeedbackRequest,
     FeedbackResponse,
     HealthResponse,
     RecommendRequest,
-    RecommendationItem,
     RecommendResponse,
     RetrainResponse,
 )
@@ -53,10 +53,6 @@ def _resolve_origin(
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
-def _round_breakdown(values: dict[str, float]) -> dict[str, float]:
-    return {key: round(float(value), 6) for key, value in values.items()}
-
-
 @app.get("/health", response_model=HealthResponse)
 def health() -> HealthResponse:
     return HealthResponse(
@@ -71,87 +67,12 @@ def health() -> HealthResponse:
 def recommend(request: RecommendRequest) -> RecommendResponse:
     gateway = _gateway()
     latitude, longitude = _resolve_origin(gateway, request)
-    target_at = request.target_at or datetime.now(timezone.utc)
-
+    service = RecommendationService(gateway, model, settings)
     try:
-        candidates = gateway.get_recommendation_candidates(
-            latitude=latitude,
-            longitude=longitude,
-            radius_m=request.radius_m,
-        )
-    except Exception as exc:
-        raise HTTPException(
-            status_code=502, detail=f"Failed to fetch recommendation candidates: {exc}"
-        ) from exc
-
-    feature_rows = [
-        build_features(candidate, target_at, capacity=settings.default_capacity)
-        for candidate in candidates
-    ]
-    predictions = model.predict(feature_rows)
-    ranked: list[dict[str, Any]] = []
-    for candidate, features, prediction in zip(
-        candidates, feature_rows, predictions, strict=True
-    ):
-        ranked.append(
-            {
-                "candidate": candidate,
-                "features": features,
-                "score": prediction.score,
-                "breakdown": prediction.breakdown,
-            }
-        )
-    ranked.sort(key=lambda item: item["score"], reverse=True)
-
-    log_rows: list[dict[str, Any]] = []
-    for index, item in enumerate(ranked, start=1):
-        candidate = item["candidate"]
-        log_rows.append(
-            {
-                "parcel_id": str(request.parcel_id) if request.parcel_id else None,
-                "recipient_id": str(request.recipient_id)
-                if request.recipient_id
-                else None,
-                "candidate_agent_id": str(candidate["user_id"]),
-                "features": item["features"],
-                "score": float(item["score"]),
-                "rank": index,
-                "model_version": model.version,
-            }
-        )
-
-    try:
-        gateway.insert_recommendation_logs(log_rows)
-    except Exception as exc:
-        raise HTTPException(
-            status_code=502, detail=f"Failed to insert recommendation logs: {exc}"
-        ) from exc
-
-    recommendations: list[RecommendationItem] = []
-    for index, item in enumerate(ranked[: request.top_k], start=1):
-        candidate = item["candidate"]
-        distance_meters = float(candidate.get("distance_meters") or 0)
-        recommendations.append(
-            RecommendationItem(
-                agent_id=candidate["user_id"],
-                full_name=candidate.get("full_name"),
-                rank=index,
-                score=round(float(item["score"]), 6),
-                distance_meters=round(distance_meters, 2),
-                breakdown=_round_breakdown(item["breakdown"]),
-                reasons=build_reasons(
-                    item["features"],
-                    item["breakdown"],
-                    distance_meters=distance_meters,
-                ),
-            )
-        )
-
-    return RecommendResponse(
-        model_version=model.version,
-        generated_at=datetime.now(timezone.utc),
-        recommendations=recommendations,
-    )
+        return service.recommend(request, latitude=latitude, longitude=longitude)
+    except (CandidateFetchError, LogPersistError) as exc:
+        # 下流 (Supabase) 起因の障害は 502 Bad Gateway。
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
 
 
 @app.post("/feedback", response_model=FeedbackResponse)
