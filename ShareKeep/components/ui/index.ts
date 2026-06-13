@@ -3,6 +3,7 @@ export { PrimaryButton } from './PrimaryButton';
 export { Card } from './Card';
 export { InfoRow } from './InfoRow';
 export { StatusBadge } from './StatusBadge';
+export { QuestStatusBar } from './QuestStatusBar';
 export { Screen } from './Screen';
 export { SectionTitle } from './SectionTitle';
 export { EmptyState } from './EmptyState';

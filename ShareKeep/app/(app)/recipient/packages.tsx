@@ -14,24 +14,28 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { supabase } from '../../../lib/supabase';
-import { toUIStatus, type UIStatus } from '../../../lib/status';
+import { toUIStatus, questStatusMeta, type UIStatus } from '../../../lib/status';
 import { createParcel, fetchMyParcels } from '../../../features/parcels';
 import { DEMO_DELIVERY_COMPANY_ID } from '../../../lib/config';
 import { colors } from '../../../lib/theme';
-import { ScreenHeader, StatusBadge } from '../../../components/ui';
+import { ScreenHeader, StatusBadge, QuestStatusBar } from '../../../components/ui';
 
 type Package = {
   id: string;
   trackingNumber: string;
   sender: string;
   status: UIStatus;
+  // クエスト風表示（バッジ文言・ステップバー）に使う生 ParcelStatus。
+  // 内部ロジックは引き続き 3 状態集約の status を使う。
+  rawStatus: string | null;
   agentName?: string;
 };
 
-const STATUS_CONFIG: Record<UIStatus, { label: string; color: string; bg: string; icon: keyof typeof Ionicons.glyphMap }> = {
-  waiting:   { label: '配達待ち', color: '#B45309', bg: '#FEF3C7', icon: 'time-outline' },
-  stored:    { label: '保管中',   color: '#1A7A4C', bg: '#D1FAE5', icon: 'home-outline' },
-  completed: { label: '受取完了', color: '#6B7280', bg: '#F3F4F6', icon: 'checkmark-circle-outline' },
+// バッジ背景色は従来の 3 状態トーンを踏襲（クエスト文言はバッジ内テキストで表現）。
+const STATUS_BADGE_BG: Record<UIStatus, string> = {
+  waiting:   '#FEF3C7',
+  stored:    '#D1FAE5',
+  completed: '#F3F4F6',
 };
 
 const FILTER_OPTIONS: { key: 'all' | UIStatus; label: string }[] = [
@@ -61,6 +65,7 @@ export default function PackagesScreen() {
         trackingNumber: p.tracking_no,
         sender: p.delivery_companies?.name ?? '不明',
         status: toUIStatus(p.status),
+        rawStatus: p.status ?? null,
         agentName: p.assigned_agent?.full_name ?? undefined,
       }));
 
@@ -195,7 +200,8 @@ export default function PackagesScreen() {
 }
 
 function PackageCard({ pkg }: { pkg: Package }) {
-  const status = STATUS_CONFIG[pkg.status];
+  // クエスト風メタ（文言/アイコン/色）を生 status から解決。バッジ背景は 3 状態トーンを維持。
+  const quest = questStatusMeta(pkg.rawStatus);
   return (
     <TouchableOpacity
       style={styles.card}
@@ -213,8 +219,10 @@ function PackageCard({ pkg }: { pkg: Package }) {
           <Ionicons name="cube-outline" size={18} color={colors.green} />
           <Text style={styles.cardTitle}>{pkg.trackingNumber}</Text>
         </View>
-        <StatusBadge label={status.label} color={status.color} bg={status.bg} icon={status.icon} />
+        <StatusBadge label={quest.label} color={quest.color} bg={STATUS_BADGE_BG[pkg.status]} icon={quest.icon} />
       </View>
+
+      <QuestStatusBar status={pkg.rawStatus} />
 
       <View style={styles.cardMeta}>
         <View style={styles.metaItem}>
