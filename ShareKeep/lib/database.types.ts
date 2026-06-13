@@ -31,6 +31,8 @@ export interface AgentProfile {
   level: number | null;
   points: number | null;
   completed_deliveries: number | null;
+  // 機能7': 代理人の顔写真（任意）。Storage `agent-avatars` のオブジェクトパス。null=未設定（オプトアウト）。
+  avatar_url: string | null;
 }
 
 export interface Parcel {
@@ -42,6 +44,10 @@ export interface Parcel {
   status: ParcelStatus | null;
   retry_count: number | null;
   co2_saved_kg: number | null;
+  // 機能6: 保管期限。delivered_to_agent 遷移時に DBトリガが started/deadline を自動セット。
+  storage_started_at: string | null;
+  storage_deadline_at: string | null;
+  storage_overdue_notified_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -119,5 +125,19 @@ export interface RecommendationLog {
   model_version: string | null;
   chosen: boolean;
   outcome: string | null; // 'completed' | 'failed' | null
+  created_at: string;
+}
+
+// 機能8: 簡易トラブル報告。報告記録のみ（責任判定・補償は対象外）。
+export type SupportCategory = 'damaged' | 'opened' | 'wet' | 'overdue' | 'lost' | 'other';
+export type SupportReportStatus = 'open' | 'reviewing' | 'resolved';
+
+export interface SupportReport {
+  id: string;
+  parcel_id: string | null;
+  reporter_id: string | null;
+  category: SupportCategory | string;
+  status: SupportReportStatus | string;
+  note: string | null;
   created_at: string;
 }

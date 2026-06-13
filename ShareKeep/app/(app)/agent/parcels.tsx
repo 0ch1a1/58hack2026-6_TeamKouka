@@ -18,6 +18,8 @@ import { supabase } from '../../../lib/supabase';
 import { colors } from '../../../lib/theme';
 import { ScreenHeader, Card, StatusBadge, QuestStatusBar } from '../../../components/ui';
 import { questStatusMeta } from '../../../lib/status';
+import { StorageDeadlineBadge } from '../../../components/StorageDeadlineBadge';
+import { SupportReportForm } from '../../../components/SupportReportForm';
 import { generateQrToken, verifyRecipientQr, updateParcelStatus } from '../../../features/parcels';
 
 type MatchedParcel = {
@@ -27,6 +29,8 @@ type MatchedParcel = {
   recipientName: string;
   status: string;
   parcelStatus: string | null;
+  // 機能6: 保管期限（delivered_to_agent で値が入る）。null=未設定。
+  deadlineAt: string | null;
   qrToken: string | null;
 };
 
@@ -34,7 +38,7 @@ type MatchedParcel = {
 // parcels / profiles の to-one 埋め込みは実行時は単一オブジェクトだが、生成型なしの
 // Supabase 推論では配列になり得るため両方を許容する（旧 (m: any) と等価のアクセスを保つ）。
 type Embed<T> = T | T[] | null;
-type ParcelEmbed = { tracking_no: string | null; status: string | null };
+type ParcelEmbed = { tracking_no: string | null; status: string | null; storage_deadline_at: string | null };
 type ProfileEmbed = { full_name: string | null };
 type MatchRow = {
   id: string;
@@ -53,6 +57,7 @@ export default function AgentParcelsScreen() {
   const [loading, setLoading] = useState(true);
   const [qrParcel, setQrParcel] = useState<MatchedParcel | null>(null);
   const [scanParcel, setScanParcel] = useState<MatchedParcel | null>(null);
+  const [reportParcel, setReportParcel] = useState<MatchedParcel | null>(null);
   const [scanned, setScanned] = useState(false);
   const [permission, requestPermission] = useCameraPermissions();
 
@@ -66,7 +71,7 @@ export default function AgentParcelsScreen() {
         id,
         parcel_id,
         status,
-        parcels(tracking_no, status),
+        parcels(tracking_no, status, storage_deadline_at),
         profiles!recipient_id(full_name)
       `)
       .eq('agent_id', user.id)
@@ -86,6 +91,7 @@ export default function AgentParcelsScreen() {
         recipientName: profile?.full_name ?? '不明',
         status: m.status ?? 'matched',
         parcelStatus: parcel?.status ?? null,
+        deadlineAt: parcel?.storage_deadline_at ?? null,
         qrToken: null,
       };
     });
@@ -204,6 +210,11 @@ export default function AgentParcelsScreen() {
 
               <QuestStatusBar status={item.parcelStatus} />
 
+              {/* 機能6: 保管中は保管期限を表示 */}
+              {item.parcelStatus === 'delivered_to_agent' && (
+                <StorageDeadlineBadge deadlineAt={item.deadlineAt} />
+              )}
+
               <View style={styles.metaRow}>
                 <Ionicons name="person-outline" size={14} color="#9CA3AF" />
                 <Text style={styles.metaText}>受取人: {item.recipientName}</Text>
@@ -239,6 +250,12 @@ export default function AgentParcelsScreen() {
                 <Ionicons name="chatbubbles-outline" size={16} color={colors.green} />
                 <Text style={styles.messageButtonText}>メッセージ</Text>
               </TouchableOpacity>
+
+              {/* 機能8: 簡易トラブル報告（破損・濡れ等の記録） */}
+              <TouchableOpacity style={styles.messageButton} onPress={() => setReportParcel(item)}>
+                <Ionicons name="alert-circle-outline" size={16} color={colors.green} />
+                <Text style={styles.messageButtonText}>問題を報告</Text>
+              </TouchableOpacity>
             </Card>
             );
           }}
@@ -250,6 +267,22 @@ export default function AgentParcelsScreen() {
           }
         />
       )}
+
+      {/* 機能8: トラブル報告モーダル */}
+      <Modal visible={!!reportParcel} transparent animationType="fade" onRequestClose={() => setReportParcel(null)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>問題を報告</Text>
+            <Text style={styles.modalSub}>{reportParcel?.trackingNo}</Text>
+            {reportParcel && (
+              <SupportReportForm parcelId={reportParcel.parcelId} onDone={() => setReportParcel(null)} />
+            )}
+            <TouchableOpacity style={styles.closeButton} onPress={() => setReportParcel(null)}>
+              <Text style={styles.closeButtonText}>閉じる</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
 
       {/* 配達員提示用QRモーダル */}
       <Modal visible={!!qrParcel} transparent animationType="fade">

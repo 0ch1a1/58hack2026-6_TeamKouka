@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -16,6 +17,9 @@ import { LoadingDots } from './LoadingDots';
 // 機能④⑤: スコア内訳バーへの集約とプライバシー段階開示の表示ユーティリティ（AgentCard で使用）。
 import { factorsFromBreakdown, type ScoreFactors } from '../../../lib/scoring';
 import { discloseAddress } from '../../../lib/geo';
+// 機能7': 代理人の顔写真（任意・未設定可）。候補カードに信頼シグナルとして表示。
+import { getAgentAvatarUrls } from '../../../features/avatar';
+import { Avatar } from '../../../components/Avatar';
 
 // 因子バーの表示定義。feature-ideas.md「スコア関数の定義」の 3 因子（時間帯 T / 距離 D / 実績 R）に対応。
 // recommendation-api の breakdown（多数の特徴量）は factorsFromBreakdown でこの 3 因子に集約する。
@@ -66,6 +70,18 @@ function SelectView({
   onSelect: (agentId: string) => void;
   onConfirm: () => void;
 }) {
+  // 機能7': 候補代理人の顔写真（署名URL）を一括取得。未設定の代理人は含まれない。
+  const [avatarUrls, setAvatarUrls] = useState<Record<string, string>>({});
+  useEffect(() => {
+    let active = true;
+    const ids = candidates.map((c) => c.agent_id);
+    if (ids.length === 0) return;
+    getAgentAvatarUrls(ids)
+      .then((map) => { if (active) setAvatarUrls(map); })
+      .catch(() => { /* 取得失敗時はプレースホルダ表示で継続 */ });
+    return () => { active = false; };
+  }, [candidates]);
+
   return (
     <SafeAreaView style={styles.safe}>
       <ScreenHeader title="代理人を選ぶ" />
@@ -77,6 +93,7 @@ function SelectView({
           <AgentCard
             key={agent.agent_id}
             agent={agent}
+            avatarUrl={avatarUrls[agent.agent_id] ?? null}
             selected={agent.agent_id === selectedId}
             onSelect={() => onSelect(agent.agent_id)}
           />
@@ -140,10 +157,12 @@ function WaitingView({
 // 候補1件のカード。総合スコア・選択状態・3 因子バー（距離/対応時間/実績）・理由を表示。
 function AgentCard({
   agent,
+  avatarUrl,
   selected,
   onSelect,
 }: {
   agent: RecommendedAgent;
+  avatarUrl: string | null;
   selected: boolean;
   onSelect: () => void;
 }) {
@@ -174,6 +193,8 @@ function AgentCard({
           <View style={styles.rankBadge}>
             <Text style={styles.rankText}>{agent.rank}</Text>
           </View>
+          {/* 機能7': 代理人の顔写真。未設定なら頭文字プレースホルダ。 */}
+          <Avatar uri={avatarUrl} name={agent.full_name} size={40} />
           <View style={styles.agentNameWrap}>
             <Text style={styles.agentName}>{agent.full_name ?? '代理人'}</Text>
             <View style={styles.agentMetaRow}>

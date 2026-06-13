@@ -17,6 +17,8 @@ import { generateQrToken, subscribeParcel, fetchParcel } from '../../../features
 import { isHandedOff } from '../../../lib/status';
 import { colors, radius } from '../../../lib/theme';
 import { ScreenHeader, PrimaryButton, Card, InfoRow } from '../../../components/ui';
+import { StorageDeadlineBadge } from '../../../components/StorageDeadlineBadge';
+import { SupportReportForm } from '../../../components/SupportReportForm';
 
 type AgentInfo = {
   name: string;
@@ -44,6 +46,9 @@ export default function PickupReadyScreen() {
   const [trackingNo, setTrackingNo] = useState<string>('—');
   const [qrToken, setQrToken] = useState<string | null>(null);
   const [qrVisible, setQrVisible] = useState(false);
+  // 機能6: 保管期限 / 機能8: トラブル報告モーダル
+  const [deadlineAt, setDeadlineAt] = useState<string | null>(null);
+  const [reportVisible, setReportVisible] = useState(false);
 
   useEffect(() => {
     if (!parcelId) { setLoading(false); return; }
@@ -61,6 +66,7 @@ export default function PickupReadyScreen() {
       ]);
 
       setTrackingNo(parcel?.tracking_no ?? '—');
+      setDeadlineAt(parcel?.storage_deadline_at ?? null);
 
       // 引き渡し確認QR（受取人提示用トークン）を features 経由で生成
       try {
@@ -170,6 +176,8 @@ export default function PickupReadyScreen() {
         <Card>
           <Text style={styles.cardSectionTitle}>荷物の情報</Text>
           <InfoRow label="追跡番号" value={trackingNo} />
+          {/* 機能6: 保管期限（当日中/残りわずか/期限超過） */}
+          <StorageDeadlineBadge deadlineAt={deadlineAt} />
         </Card>
 
         <PrimaryButton label="今から取りに行く" icon="walk-outline" onPress={handleGoNow} />
@@ -190,7 +198,30 @@ export default function PickupReadyScreen() {
             <Text style={styles.secondaryButtonText}>メッセージ</Text>
           </TouchableOpacity>
         ) : null}
+
+        {/* 機能8: 簡易トラブル報告 */}
+        {parcelId ? (
+          <TouchableOpacity style={styles.secondaryButton} onPress={() => setReportVisible(true)}>
+            <Ionicons name="alert-circle-outline" size={20} color={colors.green} />
+            <Text style={styles.secondaryButtonText}>問題を報告</Text>
+          </TouchableOpacity>
+        ) : null}
       </View>
+
+      {/* 機能8: トラブル報告モーダル */}
+      <Modal visible={reportVisible} transparent animationType="fade" onRequestClose={() => setReportVisible(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>問題を報告</Text>
+            {parcelId && (
+              <SupportReportForm parcelId={parcelId} onDone={() => setReportVisible(false)} />
+            )}
+            <TouchableOpacity style={styles.secondaryButton} onPress={() => setReportVisible(false)}>
+              <Text style={styles.secondaryButtonText}>閉じる</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
 
       <Modal visible={qrVisible} transparent animationType="fade">
         <View style={styles.modalOverlay}>

@@ -28,6 +28,8 @@ export async function fetchDriverParcels(deliveryCompanyId: string) {
       status,
       retry_count,
       co2_saved_kg,
+      storage_started_at,
+      storage_deadline_at,
       created_at,
       updated_at,
       delivery_companies(name),

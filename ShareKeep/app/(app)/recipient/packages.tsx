@@ -19,6 +19,7 @@ import { createParcel, fetchMyParcels } from '../../../features/parcels';
 import { DEMO_DELIVERY_COMPANY_ID } from '../../../lib/config';
 import { colors } from '../../../lib/theme';
 import { ScreenHeader, StatusBadge, QuestStatusBar } from '../../../components/ui';
+import { StorageDeadlineBadge } from '../../../components/StorageDeadlineBadge';
 
 type Package = {
   id: string;
@@ -28,6 +29,8 @@ type Package = {
   // クエスト風表示（バッジ文言・ステップバー）に使う生 ParcelStatus。
   // 内部ロジックは引き続き 3 状態集約の status を使う。
   rawStatus: string | null;
+  // 機能6: 保管期限（保管中の荷物のみ値が入る）。null=未設定。
+  deadlineAt: string | null;
   agentName?: string;
 };
 
@@ -66,6 +69,7 @@ export default function PackagesScreen() {
         sender: p.delivery_companies?.name ?? '不明',
         status: toUIStatus(p.status),
         rawStatus: p.status ?? null,
+        deadlineAt: p.storage_deadline_at ?? null,
         agentName: p.assigned_agent?.full_name ?? undefined,
       }));
 
@@ -223,6 +227,9 @@ function PackageCard({ pkg }: { pkg: Package }) {
       </View>
 
       <QuestStatusBar status={pkg.rawStatus} />
+
+      {/* 機能6: 保管中は保管期限を表示（当日中/残りわずか/期限超過） */}
+      {pkg.status === 'stored' && <StorageDeadlineBadge deadlineAt={pkg.deadlineAt} />}
 
       <View style={styles.cardMeta}>
         <View style={styles.metaItem}>

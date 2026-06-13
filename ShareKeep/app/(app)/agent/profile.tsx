@@ -13,8 +13,10 @@ import {
 import { router } from 'expo-router';
 import { supabase } from '../../../lib/supabase';
 import { geocodeAgentAddress } from '../../../features/parcels';
+import { getAgentAvatarUrls } from '../../../features/avatar';
 import { colors } from '../../../lib/theme';
 import { ScreenHeader, PrimaryButton, Card } from '../../../components/ui';
+import { AvatarPicker } from '../../../components/AvatarPicker';
 
 const DAYS = ['月', '火', '水', '木', '金', '土', '日'] as const;
 type Day = (typeof DAYS)[number];
@@ -29,17 +31,36 @@ export default function AgentProfileScreen() {
   const [timeTo, setTimeTo] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  // 機能7': 顔写真（任意）。userId は AvatarPicker のアップロード先パスに使う。
+  const [userId, setUserId] = useState<string | null>(null);
+  const [avatarName, setAvatarName] = useState<string | null>(null);
+  const [avatarUri, setAvatarUri] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchProfile = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { setLoading(false); return; }
+      setUserId(user.id);
 
       const { data } = await supabase
         .from('agent_profiles')
         .select('*')
         .eq('user_id', user.id)
         .maybeSingle();
+
+      // プレースホルダ頭文字用に表示名を取得（任意）。失敗は無視。
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('full_name')
+        .eq('id', user.id)
+        .maybeSingle();
+      setAvatarName(profile?.full_name ?? null);
+
+      // 既存の顔写真があれば署名URLを取得して表示。未設定なら null（プレースホルダ）。
+      if (data?.avatar_url) {
+        const urls = await getAgentAvatarUrls([user.id]);
+        setAvatarUri(urls[user.id] ?? null);
+      }
 
       if (data) {
         // geocode-agent-address は address（ジオコ結果の display_name で上書き）と
@@ -132,6 +153,22 @@ export default function AgentProfileScreen() {
       <ScreenHeader title="代理人プロファイル" />
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+        <Card>
+          <Text style={styles.sectionTitle}>顔写真（任意）</Text>
+          {userId && (
+            <AvatarPicker
+              userId={userId}
+              displayUri={avatarUri}
+              name={avatarName}
+              onChanged={(path) => {
+                // 削除時は即プレースホルダへ。登録時は AvatarPicker 側がローカルURIを即時表示するため、
+                // ここでは保存済みの署名URLをクリアして二重表示を避ける。
+                if (!path) setAvatarUri(null);
+              }}
+            />
+          )}
+        </Card>
+
         <Card>
           <Text style={styles.sectionTitle}>受取場所</Text>
 
