@@ -5,6 +5,7 @@ import { router } from 'expo-router';
 import TreeScene from '../../components/TreeScene';
 import { colors } from '../../lib/theme';
 import { Card } from '../../components/ui';
+import { RegionalContributionCard } from '../../components/RegionalContributionCard';
 import { getMyRole } from '../../features/auth';
 
 type Mode = 'recipient' | 'agent';
@@ -100,6 +101,11 @@ export default function HomeScreen() {
             <Text style={[styles.tabText, mode === 'agent' && styles.tabTextActive]}> 代理モード</Text>
           </View>
         </TouchableOpacity>
+      </View>
+
+      {/* 地域貢献カード（機能③・全体集計） */}
+      <View style={styles.regionalWrap}>
+        <RegionalContributionCard />
       </View>
 
       {/* モード別コンテンツ（後続タスクで各画面へ遷移） */}
@@ -236,6 +242,10 @@ const styles = StyleSheet.create({
   },
   tabTextActive: {
     color: '#FFFFFF',
+  },
+  regionalWrap: {
+    paddingHorizontal: 16,
+    paddingBottom: 12,
   },
   modeContent: {
     paddingHorizontal: 16,
