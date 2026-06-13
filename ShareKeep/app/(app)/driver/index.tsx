@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -11,7 +11,7 @@ import {
   RefreshControl,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { colors, cardShadow, radius, spacing } from '../../../lib/theme';
 import { Card, InfoRow, StatusBadge, EmptyState } from '../../../components/ui';
 import {
@@ -33,43 +33,77 @@ export default function DriverHomeScreen() {
   const [parcels, setParcels] = useState<DriverParcel[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  // アクション実行中の parcelId。多重タップ防止＆ボタンの spinner 表示に使う。
+  const [error, setError] = useState(false);
+  // アクション実行中の parcelId。ボタンの spinner 表示に使う（多重防止は inFlightRef）。
   const [busyId, setBusyId] = useState<string | null>(null);
 
+  // アンマウント後の setState ガード。
+  const mountedRef = useRef(true);
+  // 全アクション共通の同期ロック（start/fail の連打・match/scan の多重 push を防ぐ）。
+  const inFlightRef = useRef(false);
+  // 取得のシーケンス番号。古い load の結果が新しい結果を上書きするのを防ぐ。
+  const loadSeqRef = useRef(0);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
+  // 画面が focus する度にナビゲーションロックを解放（match/scan で遷移→戻った時に再操作可能に）。
+  useFocusEffect(
+    useCallback(() => {
+      inFlightRef.current = false;
+    }, []),
+  );
+
   const load = useCallback(async () => {
+    const seq = ++loadSeqRef.current;
     try {
       const data = await fetchDriverParcels(DEMO_DELIVERY_COMPANY_ID);
+      if (!mountedRef.current || seq !== loadSeqRef.current) return; // 古い/解放後は捨てる
       setParcels(data);
+      setError(false);
     } catch {
-      Alert.alert('エラー', '荷物一覧の取得に失敗しました。');
+      if (!mountedRef.current || seq !== loadSeqRef.current) return;
+      setError(true);
     }
   }, []);
 
   useEffect(() => {
     (async () => {
       await load();
-      setLoading(false);
+      if (mountedRef.current) setLoading(false);
     })();
   }, [load]);
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
     await load();
-    setRefreshing(false);
+    if (mountedRef.current) setRefreshing(false);
+  }, [load]);
+
+  const handleRetry = useCallback(async () => {
+    setLoading(true);
+    setError(false);
+    await load();
+    if (mountedRef.current) setLoading(false);
   }, [load]);
 
   // start / fail はその場でステータス更新→一覧再取得。match / scan は別画面へ遷移。
   const handleAction = useCallback(
     async (action: DriverAction, parcel: DriverParcel) => {
-      if (busyId) return;
+      if (inFlightRef.current) return; // 同期ロック（最優先）
+      inFlightRef.current = true;
 
       if (action === 'match') {
         router.push({ pathname: '/(app)/driver/agents', params: { parcelId: parcel.id } });
-        return;
+        return; // ロックは focus 復帰時に解放
       }
       if (action === 'scan') {
         router.push({ pathname: '/(app)/driver/scan', params: { parcelId: parcel.id } });
-        return;
+        return; // ロックは focus 復帰時に解放
       }
 
       setBusyId(parcel.id);
@@ -83,10 +117,11 @@ export default function DriverHomeScreen() {
       } catch {
         Alert.alert('エラー', action === 'start' ? '配達開始に失敗しました。' : '不在報告に失敗しました。');
       } finally {
-        setBusyId(null);
+        if (mountedRef.current) setBusyId(null);
+        inFlightRef.current = false; // 非遷移アクションはここで解放
       }
     },
-    [busyId, load],
+    [load],
   );
 
   const handleSignOut = useCallback(async () => {
@@ -110,6 +145,15 @@ export default function DriverHomeScreen() {
       {loading ? (
         <View style={styles.center}>
           <ActivityIndicator size="large" color={colors.driver} />
+        </View>
+      ) : error ? (
+        <View style={styles.center}>
+          <Ionicons name="cloud-offline-outline" size={40} color={colors.grayLight} />
+          <Text style={styles.errorText}>荷物一覧の取得に失敗しました</Text>
+          <TouchableOpacity style={styles.retryButton} onPress={handleRetry}>
+            <Ionicons name="refresh" size={16} color={colors.white} />
+            <Text style={styles.retryText}>再試行</Text>
+          </TouchableOpacity>
         </View>
       ) : (
         <FlatList
@@ -210,7 +254,18 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: 18, fontWeight: '700', color: colors.ink },
   signOutButton: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, paddingVertical: spacing.xs },
   signOutText: { fontSize: 13, fontWeight: '600', color: colors.gray },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.md, padding: spacing.xl },
+  errorText: { fontSize: 14, color: colors.gray, textAlign: 'center' },
+  retryButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    backgroundColor: colors.driver,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: 10,
+    borderRadius: radius.button,
+  },
+  retryText: { fontSize: 13, fontWeight: '600', color: colors.white },
   listContent: { paddingHorizontal: spacing.lg, paddingTop: spacing.sm, paddingBottom: spacing.xxl, gap: spacing.md },
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   cardTitleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, flex: 1 },
