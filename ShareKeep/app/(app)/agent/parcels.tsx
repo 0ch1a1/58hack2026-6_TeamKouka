@@ -21,6 +21,7 @@ import { questStatusMeta } from '../../../lib/status';
 import { StorageDeadlineBadge } from '../../../components/StorageDeadlineBadge';
 import { SupportReportForm } from '../../../components/SupportReportForm';
 import { generateQrToken, verifyRecipientQr, updateParcelStatus } from '../../../features/parcels';
+import { fetchDeliveryLocation, upsertDeliveryLocation } from '../../../features/tracking';
 
 type MatchedParcel = {
   matchId: string;
@@ -52,6 +53,28 @@ type MatchRow = {
 // （Array.isArray=false）なので値をそのまま返し、旧挙動と完全に等価。
 const toOne = <T,>(v: Embed<T>): T | null => (Array.isArray(v) ? (v[0] ?? null) : v);
 
+const DEMO_ROUTE = [
+  { lat: 35.681236, lng: 139.767125 },
+  { lat: 35.682839, lng: 139.76571 },
+  { lat: 35.684313, lng: 139.76382 },
+  { lat: 35.685176, lng: 139.761421 },
+  { lat: 35.686214, lng: 139.759082 },
+  { lat: 35.687061, lng: 139.756812 },
+] as const;
+
+const nextDemoProgress = (progress: number | null | undefined) => {
+  const current = typeof progress === 'number' && Number.isFinite(progress) ? Math.round(progress) : 0;
+  return current >= 100 ? 0 : Math.min(100, current + 20);
+};
+
+const routePointForProgress = (progress: number) => {
+  const index = Math.min(
+    DEMO_ROUTE.length - 1,
+    Math.max(0, Math.round((progress / 100) * (DEMO_ROUTE.length - 1))),
+  );
+  return DEMO_ROUTE[index];
+};
+
 export default function AgentParcelsScreen() {
   const [parcels, setParcels] = useState<MatchedParcel[]>([]);
   const [loading, setLoading] = useState(true);
@@ -59,6 +82,8 @@ export default function AgentParcelsScreen() {
   const [scanParcel, setScanParcel] = useState<MatchedParcel | null>(null);
   const [reportParcel, setReportParcel] = useState<MatchedParcel | null>(null);
   const [scanned, setScanned] = useState(false);
+  const [demoProgress, setDemoProgress] = useState<Record<string, number>>({});
+  const [trackingBusyParcelId, setTrackingBusyParcelId] = useState<string | null>(null);
   const [permission, requestPermission] = useCameraPermissions();
 
   const fetchParcels = useCallback(async () => {
@@ -182,6 +207,26 @@ export default function AgentParcelsScreen() {
     ]);
   };
 
+  const handleAdvanceTracking = async (parcel: MatchedParcel) => {
+    setTrackingBusyParcelId(parcel.parcelId);
+    try {
+      const currentLocation = await fetchDeliveryLocation(parcel.parcelId);
+      const progress = nextDemoProgress(currentLocation?.progress ?? demoProgress[parcel.parcelId]);
+      const point = routePointForProgress(progress);
+
+      await upsertDeliveryLocation(parcel.parcelId, {
+        lat: point.lat,
+        lng: point.lng,
+        progress,
+      });
+      setDemoProgress((prev) => ({ ...prev, [parcel.parcelId]: progress }));
+    } catch {
+      Alert.alert('エラー', 'デモ位置の更新に失敗しました。');
+    } finally {
+      setTrackingBusyParcelId(null);
+    }
+  };
+
   return (
     <SafeAreaView style={styles.safe}>
       <ScreenHeader title="請負リスト" />
@@ -237,6 +282,20 @@ export default function AgentParcelsScreen() {
                   </TouchableOpacity>
                 </View>
               )}
+
+              {item.parcelStatus === 'delivered_to_agent' ? (
+                <TouchableOpacity
+                  style={[
+                    styles.trackingButton,
+                    trackingBusyParcelId === item.parcelId && styles.disabledButton,
+                  ]}
+                  onPress={() => handleAdvanceTracking(item)}
+                  disabled={trackingBusyParcelId === item.parcelId}
+                >
+                  <Ionicons name="navigate-outline" size={16} color={colors.green} />
+                  <Text style={styles.trackingButtonText}>デモ:位置を進める</Text>
+                </TouchableOpacity>
+              ) : null}
 
               <TouchableOpacity
                 style={styles.messageButton}
@@ -340,6 +399,9 @@ const styles = StyleSheet.create({
   qrButtonText: { fontSize: 13, fontWeight: '600', color: colors.green },
   scanButton: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 10, borderRadius: 10, backgroundColor: colors.green },
   scanButtonText: { fontSize: 13, fontWeight: '600', color: '#FFFFFF' },
+  trackingButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 10, borderRadius: 10, backgroundColor: colors.greenLight },
+  trackingButtonText: { fontSize: 13, fontWeight: '600', color: colors.green },
+  disabledButton: { opacity: 0.5 },
   messageButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 10, borderRadius: 10, borderWidth: 1.5, borderColor: colors.green },
   messageButtonText: { fontSize: 13, fontWeight: '600', color: colors.green },
   emptyText: { fontSize: 15, color: '#9CA3AF' },
