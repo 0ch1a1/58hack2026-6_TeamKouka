@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, ActivityIndicator } from 'react-native';
+import { useState, useRef, useCallback } from 'react';
+import { View, Text, StyleSheet, SafeAreaView, ActivityIndicator, Linking } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { CameraView, useCameraPermissions } from 'expo-camera';
@@ -17,18 +17,33 @@ import { verifyAgentQr, fetchParcel } from '../../../features/parcels';
 type ErrorKind = 'invalid' | 'expired' | 'network';
 
 // throw された Error.message から種別を推定する。
-// メッセージ文言に依存するため、判定できない場合は通信失敗（network）に倒す。
+// 注意: Edge Function の返す文言に依存する暫定実装。根治は verify-agent-qr が
+// 機械可読な error code を返す形（features/parcels.ts 改修）に寄せること。
+// 誤分類を避けるため、まず network 系を判定してから expired → invalid の順に見る
+// （'TypeError: Network request failed' を invalid に誤分類しないよう、単独の 'type' 一致は使わない）。
 function classifyError(error: unknown): ErrorKind {
   const message = (error instanceof Error ? error.message : String(error ?? '')).toLowerCase();
+  if (
+    message.includes('network') ||
+    message.includes('fetch') ||
+    message.includes('timeout') ||
+    message.includes('timed out') ||
+    message.includes('通信')
+  ) {
+    return 'network';
+  }
   if (message.includes('expire') || message.includes('期限')) return 'expired';
   if (
     message.includes('invalid') ||
-    message.includes('type') ||
+    message.includes('wrong_type') ||
     message.includes('種別') ||
-    message.includes('無効')
+    message.includes('無効') ||
+    message.includes('not found') ||
+    message.includes('used')
   ) {
     return 'invalid';
   }
+  // 判定できない場合は通信失敗に倒す。
   return 'network';
 }
 
@@ -38,26 +53,28 @@ const ERROR_MESSAGE: Record<ErrorKind, string> = {
   network: '通信に失敗しました。再度お試しください',
 };
 
-type Phase = 'scanning' | 'verifying' | 'done' | 'error';
+// done   : 受け渡し完了（status 確認済み or 確認不能=null）
+// mismatch: verify は成功したが、選択中の荷物の status が delivered_to_agent でない
+//           → 別荷物のQRを誤読した可能性。成功画面にせず警告する。
+type Phase = 'scanning' | 'verifying' | 'done' | 'mismatch' | 'error';
 
 export default function DriverScanScreen() {
-  const { parcelId } = useLocalSearchParams<{ parcelId?: string }>();
+  const { parcelId: rawParcelId } = useLocalSearchParams<{ parcelId?: string }>();
+  // Expo Router の search param は配列で返ることがあるため string に正規化。
+  const parcelId = typeof rawParcelId === 'string' && rawParcelId.length > 0 ? rawParcelId : undefined;
   const [permission, requestPermission] = useCameraPermissions();
   const [scanned, setScanned] = useState(false);
   const [phase, setPhase] = useState<Phase>('scanning');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  // 表示整合チェックの結果メモ（delivered_to_agent になっていれば true）。
+  // 表示整合チェックの結果メモ（delivered_to_agent になっていれば true、読めなければ null）。
   const [statusConfirmed, setStatusConfirmed] = useState<boolean | null>(null);
-
-  // 画面表示時にカメラ権限をリクエスト。
-  useEffect(() => {
-    if (permission && !permission.granted && permission.canAskAgain) {
-      requestPermission();
-    }
-  }, [permission, requestPermission]);
+  // 二重読み取りの同期ガード。state(scanned) は反映が非同期で、CameraView の連続発火に
+  // 対して取りこぼすため、即時反映の ref を併用する（true で以降の発火を確実に弾く）。
+  const scannedRef = useRef(false);
 
   // 再スキャンへ戻す。
   const resetScan = useCallback(() => {
+    scannedRef.current = false;
     setScanned(false);
     setPhase('scanning');
     setErrorMsg(null);
@@ -66,7 +83,8 @@ export default function DriverScanScreen() {
 
   const handleScanned = useCallback(
     async ({ data }: { data: string }) => {
-      if (scanned) return;
+      if (scannedRef.current) return; // 同期ガード（最優先）
+      scannedRef.current = true;
       setScanned(true);
       setPhase('verifying');
       setErrorMsg(null);
@@ -84,19 +102,35 @@ export default function DriverScanScreen() {
       // 表示整合チェック。parcelId が無い場合（QR token から荷物を解決できる）は
       // fetchParcel をスキップして完了扱いにする。
       if (parcelId) {
+        let parcel = null;
         try {
-          const parcel = await fetchParcel(parcelId);
-          setStatusConfirmed(parcel?.status === 'delivered_to_agent');
+          parcel = await fetchParcel(parcelId);
         } catch {
-          // 整合確認の失敗は致命的ではない。verify は成功しているため完了扱いにし、
-          // 確認は不明（null）のままにする。
+          // 整合確認の失敗（RLS で読めない等）は致命的ではない。verify は成功しているため
+          // 完了扱いにし、確認は不明（null）のままにする。
           setStatusConfirmed(null);
+          setPhase('done');
+          return;
         }
+        if (parcel === null) {
+          // 読めなかった（権限/未存在）→ 確認不能。verify 成功なので soft 完了。
+          setStatusConfirmed(null);
+          setPhase('done');
+        } else if (parcel.status === 'delivered_to_agent') {
+          setStatusConfirmed(true);
+          setPhase('done');
+        } else {
+          // 読めたが status が想定外 → 選択中の荷物とは別のQRを読んだ可能性。警告。
+          setStatusConfirmed(false);
+          setPhase('mismatch');
+        }
+        return;
       }
 
+      setStatusConfirmed(null);
       setPhase('done');
     },
-    [scanned, parcelId],
+    [parcelId],
   );
 
   // 権限読み込み中。
@@ -130,7 +164,15 @@ export default function DriverScanScreen() {
               style={styles.permButton}
             />
           ) : (
-            <Text style={styles.permSub}>設定アプリからカメラへのアクセスを許可してください。</Text>
+            <>
+              <Text style={styles.permSub}>設定アプリからカメラへのアクセスを許可してください。</Text>
+              <PrimaryButton
+                label="設定を開く"
+                icon="settings-outline"
+                onPress={() => Linking.openSettings()}
+                style={styles.permButton}
+              />
+            </>
           )}
         </View>
       </SafeAreaView>
@@ -171,28 +213,39 @@ export default function DriverScanScreen() {
               <Text style={styles.resultTitle}>代理人へ受け渡し完了</Text>
             </View>
             <Text style={styles.resultSub}>荷物を代理人へ引き渡しました。</Text>
-            {parcelId ? (
-              statusConfirmed === true ? (
-                <View style={styles.confirmRow}>
-                  <Ionicons name="cube" size={16} color={colors.driver} />
-                  <Text style={styles.confirmText}>ステータス: 代理人へ受け渡し済み</Text>
-                </View>
-              ) : statusConfirmed === false ? (
-                <View style={styles.confirmRow}>
-                  <Ionicons name="information-circle-outline" size={16} color={colors.grayLight} />
-                  <Text style={styles.confirmTextMuted}>
-                    照合は成功しました（ステータス反映の確認中）。
-                  </Text>
-                </View>
-              ) : (
-                <View style={styles.confirmRow}>
-                  <Ionicons name="information-circle-outline" size={16} color={colors.grayLight} />
-                  <Text style={styles.confirmTextMuted}>照合は成功しました。</Text>
-                </View>
-              )
-            ) : null}
+            {statusConfirmed === true ? (
+              <View style={styles.confirmRow}>
+                <Ionicons name="cube" size={16} color={colors.driver} />
+                <Text style={styles.confirmText}>ステータス: 代理人へ受け渡し済み</Text>
+              </View>
+            ) : (
+              // statusConfirmed === null（確認不能）。verify 自体は成功している。
+              <View style={styles.confirmRow}>
+                <Ionicons name="information-circle-outline" size={16} color={colors.grayLight} />
+                <Text style={styles.confirmTextMuted}>
+                  照合は成功しました（ステータス反映は確認できませんでした）。
+                </Text>
+              </View>
+            )}
           </Card>
           <PrimaryButton label="完了して戻る" icon="arrow-back" onPress={() => router.back()} />
+        </View>
+      )}
+
+      {phase === 'mismatch' && (
+        <View style={styles.resultBody}>
+          <Card>
+            <View style={styles.resultRow}>
+              <Ionicons name="warning" size={28} color="#D97706" />
+              <Text style={styles.warnTitle}>荷物を確認してください</Text>
+            </View>
+            <Text style={styles.resultSub}>
+              QRの照合は成功しましたが、選択中の荷物が「代理人へ受け渡し済み」になっていません。
+              別の荷物のQRコードを読み取った可能性があります。荷物を確認してください。
+            </Text>
+          </Card>
+          <PrimaryButton label="もう一度読み取る" icon="scan" onPress={resetScan} />
+          <PrimaryButton label="一覧に戻る" icon="arrow-back" onPress={() => router.back()} style={styles.secondaryButton} />
         </View>
       )}
 
@@ -257,6 +310,8 @@ const styles = StyleSheet.create({
   resultRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   resultTitle: { fontSize: 17, fontWeight: '700', color: colors.green },
   errorTitle: { fontSize: 17, fontWeight: '700', color: '#DC2626' },
+  warnTitle: { fontSize: 17, fontWeight: '700', color: '#D97706' },
+  secondaryButton: { backgroundColor: colors.grayLight },
   resultSub: { fontSize: 14, color: colors.gray, marginTop: spacing.sm, lineHeight: 20 },
   confirmRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginTop: spacing.md },
   confirmText: { fontSize: 13, fontWeight: '600', color: colors.driver },
