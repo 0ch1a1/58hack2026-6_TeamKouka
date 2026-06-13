@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Text, StyleSheet, Alert } from 'react-native';
 import { router } from 'expo-router';
-import { supabase } from '../../lib/supabase';
+import { signIn } from '../../features/auth';
 import { colors } from '../../lib/theme';
 import { PrimaryButton } from '../../components/ui';
 import { AuthLayout, AuthLogo, AuthTextField, AuthBackLink, AuthFooterLink } from '../../components/auth';
@@ -18,11 +18,12 @@ export default function SignInDriverScreen() {
     }
 
     setLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    setLoading(false);
-
-    if (error) {
+    try {
+      await signIn(email, password);
+    } catch {
       Alert.alert('ログイン失敗', 'メールアドレスまたはパスワードが正しくありません。');
+    } finally {
+      setLoading(false);
     }
   };
 
