@@ -113,10 +113,12 @@
 - **データ**: `delivery_matches`
 - **実装状況**: ✅（割り当て自体）。通知は DB行作成までで、UI表示の強化は F-NOTIF-01 参照。
 
-#### F-MATCH-03 優先マッチング（事前指定→近隣） ❌
-- **概要**: 受取人が事前指定した代理人を最優先 → 同建物 → 半径50m → 100m の順で探索。受取可能曜日/時間/対応可否/保管可能数/トラブル履歴で判定。
-- **API案**: `find_best_agent_for_parcel(parcel_id)`
-- **実装状況**: ❌（現状は手動選択 or 単純近隣検索）
+#### F-MATCH-03 優先マッチング / AI推薦（おすすめ代理人） ❌→🚧
+- **概要**: 受取人が事前指定した代理人を最優先 → 同建物 → 半径50m → 100m の順で探索。さらに評価/距離/対応時間/保管可能数/トラブル履歴をスコアリングして候補を並べる「おすすめ代理人」。
+- **API案**: `find_best_agent_for_parcel(parcel_id)` ／ 推薦スコアAPI
+- **実装基盤**: **`feat/recommendation-api` ブランチに構築済み**（`recommendation-service/` の Python ML サービス + Supabase migration + 設計メモ `maki-docs/recommendation-api.md`）。現アプリ本体には未接続。
+- **方針**: **AI推薦APIが完成したらデモに統合**する。それまでは F-MATCH-01/02（`find_nearby_agents`＋手動選択）で代替。
+- **実装状況**: ❌ 本体未接続 / 🚧 推薦基盤は別ブランチで構築中。
 
 ### 3.E QR認証
 
