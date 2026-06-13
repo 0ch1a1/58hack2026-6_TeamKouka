@@ -12,6 +12,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { fetchParcel } from '../../../features/parcels';
 import { colors } from '../../../lib/theme';
 import { PrimaryButton, Card, InfoRow } from '../../../components/ui';
+import { CompletionModal } from '../../../components/CompletionModal';
 
 type Result = {
   trackingNo: string;
@@ -22,6 +23,8 @@ export default function DeliveryCompleteScreen() {
   const { parcelId } = useLocalSearchParams<{ parcelId: string }>();
   const [result, setResult] = useState<Result | null>(null);
   const [loading, setLoading] = useState(true);
+  // 完了演出モーダル。結果取得後に自動表示し、閉じるとホームへ戻る。
+  const [showCelebration, setShowCelebration] = useState(false);
 
   useEffect(() => {
     if (!parcelId) { setLoading(false); return; }
@@ -40,6 +43,7 @@ export default function DeliveryCompleteScreen() {
         setResult({ trackingNo: '—', co2Saved: 0 });
       } finally {
         setLoading(false);
+        setShowCelebration(true);
       }
     };
 
@@ -90,6 +94,15 @@ export default function DeliveryCompleteScreen() {
           style={styles.primaryButton}
         />
       </ScrollView>
+
+      <CompletionModal
+        visible={showCelebration}
+        onClose={() => {
+          setShowCelebration(false);
+          router.replace('/(app)/');
+        }}
+        co2Saved={result?.co2Saved ?? 0}
+      />
     </SafeAreaView>
   );
 }
