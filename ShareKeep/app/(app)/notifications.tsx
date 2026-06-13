@@ -113,7 +113,7 @@ export default function NotificationsScreen() {
       if (!active) return;
       unsubscribe = subscribeNotifications(userId, () => {
         load();
-      });
+      }, 'list');
     })();
     return () => {
       active = false;

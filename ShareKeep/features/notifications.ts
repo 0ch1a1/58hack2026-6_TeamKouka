@@ -28,9 +28,11 @@ export async function markAllNotificationsRead() {
 
 // notifications テーブルの Realtime 購読（subscribeParcel を踏襲）。
 // 注意: userId は呼び出し側で UUID 形式を保証すること（filter に文字列補間するため）。
-export function subscribeNotifications(userId: string, onChange: () => void) {
+// key: ベル(ホーム)と一覧画面が同名チャンネルを同時購読して衝突しないよう用途別に分ける
+//      （例: 'bell' / 'list'）。
+export function subscribeNotifications(userId: string, onChange: () => void, key = 'default') {
   const channel = supabase
-    .channel(`notifications:${userId}`)
+    .channel(`notifications:${key}:${userId}`)
     .on(
       'postgres_changes',
       {

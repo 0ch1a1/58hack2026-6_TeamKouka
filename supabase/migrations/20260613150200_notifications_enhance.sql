@@ -62,7 +62,14 @@ comment on function public.mark_all_notifications_read is
 -- 3. Realtime publication へ notifications を追加
 --    （未追加だと postgres_changes 購読が発火しない）
 -- ---------------------------------------------------------------------------
-alter publication supabase_realtime add table public.notifications;
+-- publication への追加は冪等でない（既に登録済みだとエラーで migration が失敗）。
+-- 重複登録時の duplicate_object を握りつぶして冪等にする。
+do $$
+begin
+  alter publication supabase_realtime add table public.notifications;
+exception
+  when duplicate_object then null;
+end $$;
 
 -- =============================================================================
 -- 未適用 / レビュー後手動適用:

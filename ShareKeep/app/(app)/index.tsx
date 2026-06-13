@@ -35,7 +35,7 @@ function NotificationBell() {
       if (!user || !mountedRef.current) return;
       userIdRef.current = user.id;
       refresh();
-      unsubscribe = subscribeNotifications(user.id, () => refresh());
+      unsubscribe = subscribeNotifications(user.id, () => refresh(), 'bell');
     })();
     return () => {
       mountedRef.current = false;
