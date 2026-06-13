@@ -155,6 +155,8 @@ delivered_to_agent ──(受取人→代理人 引き渡し: 受取人がrecipi
 - **現状は RPC を呼ばず realtime 待ちのみ → マッチング呼び出しを新規追加する**
 - **【決定】方式 = expo-location 実機取得 ＋ auto `match_nearby_agent`**: マウント時に位置取得（A6 の expo-location、権限処理込み）→ `matchNearbyAgent({parcelId, lat, lng})` を能動呼び出し → `subscribeParcel` で status が `delivered_to_agent`（A5 `isStoredAtAgent`）になったら `pickup-ready` へ遷移。現状の `payload.new.status === 'stored'` 判定を新ステータスに修正
 - 位置情報の権限拒否時のUI（フォールバック表示）も最小実装
+- ⚠️ **半径デフォルト見直し必須**: `matchNearbyAgent` / `findNearbyAgents` の `radiusMeters` 既定は **50m（同一建物レベル）**で、デモでは実機 GPS 誤差により「代理人が見つからない（match が `null`）」事故になりやすい。B2 では `radiusMeters` を明示的に広げる（例: 1000〜5000m）こと。DB 変更は不要で引数で調整可。
+- ⚠️ **多重呼び出しガード必須**: `match_nearby_agent` は非冪等（再呼び出しで `delivery_matches` 行と通知が重複）。マウント時1回のみ呼ぶ・実行中フラグ等でガード
 
 ### B3. 受取人 — 受取準備（保管中）
 - 所有: `app/(app)/recipient/pickup-ready.tsx`
