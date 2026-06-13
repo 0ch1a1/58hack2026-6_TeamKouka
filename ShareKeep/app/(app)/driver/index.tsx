@@ -25,6 +25,7 @@ import { DEMO_DELIVERY_COMPANY_ID } from '../../../lib/config';
 import { signOut } from '../../../features/auth';
 import type { ParcelStatus } from '../../../lib/database.types';
 import { NotificationBell } from '../../../components/NotificationBell';
+import { logError } from '../../../lib/logger';
 
 // 配達員ホーム＝担当荷物リスト。status に応じたアクションボタンを出す。
 // 契約（Wave 0 確定）: fetchDriverParcels / startDelivery / reportDeliveryFailed,
@@ -61,7 +62,8 @@ export default function DriverHomeScreen() {
       if (!mountedRef.current || seq !== loadSeqRef.current) return; // 古い/解放後は捨てる
       setParcels(data);
       setError(false);
-    } catch {
+    } catch (error) {
+      logError('driver/index:loadParcels', error);
       if (!mountedRef.current || seq !== loadSeqRef.current) return;
       setError(true);
     }
@@ -123,7 +125,8 @@ export default function DriverHomeScreen() {
           await reportDeliveryFailed(parcel.id);
         }
         await load();
-      } catch {
+      } catch (error) {
+        logError(`driver/index:handleAction:${action}`, error);
         Alert.alert('エラー', action === 'start' ? '配達開始に失敗しました。' : '不在報告に失敗しました。');
       } finally {
         if (mountedRef.current) setBusyId(null);
@@ -136,7 +139,8 @@ export default function DriverHomeScreen() {
   const handleSignOut = useCallback(async () => {
     try {
       await signOut();
-    } catch {
+    } catch (error) {
+      logError('driver/index:handleSignOut', error);
       Alert.alert('エラー', 'ログアウトに失敗しました。');
     }
   }, []);
