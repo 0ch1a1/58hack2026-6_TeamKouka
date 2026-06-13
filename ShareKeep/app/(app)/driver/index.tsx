@@ -13,7 +13,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
 import { colors, cardShadow, radius, spacing } from '../../../lib/theme';
-import { Card, InfoRow, StatusBadge, EmptyState } from '../../../components/ui';
+import { Card, InfoRow, StatusBadge, EmptyState, QuestStatusBar } from '../../../components/ui';
 import {
   fetchDriverParcels,
   startDelivery,
@@ -186,6 +186,9 @@ export default function DriverHomeScreen() {
                 </View>
 
                 <InfoRow label="受取人" value={item.recipient?.full_name ?? '—'} />
+
+                {/* クエスト風の進捗ステップ（表示のみ。バッジは配達員向けの正確な status を維持）。 */}
+                <QuestStatusBar status={item.status} />
 
                 {actions.length > 0 && (
                   <View style={styles.actionRow}>
