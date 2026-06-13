@@ -11,6 +11,10 @@
 //
 // env `EXPO_PUBLIC_DEMO_DELIVERY_COMPANY_ID` で上書き可能（Expo は EXPO_PUBLIC_
 //    プレフィックスの env をクライアントに露出する）。DB 再作成時はコード変更せず
-//    env で新 ID を渡せばよい。未設定なら下記の既定 UUID にフォールバックする。
+//    env で新 ID を渡せばよい。未設定・空（.env.example をそのままコピーした空値含む）
+//    なら下記の既定 UUID にフォールバックする。
+//    ※ `??` ではなく `.trim() ||` を使うのは、空文字 '' は nullish ではないため
+//      `??` ではフォールバックされず、空 ID が create_parcel に渡って壊れるのを防ぐため。
 export const DEMO_DELIVERY_COMPANY_ID =
-  process.env.EXPO_PUBLIC_DEMO_DELIVERY_COMPANY_ID ?? 'd98697e6-e71d-463f-9d59-a706817db938';
+  process.env.EXPO_PUBLIC_DEMO_DELIVERY_COMPANY_ID?.trim() ||
+  'd98697e6-e71d-463f-9d59-a706817db938';
