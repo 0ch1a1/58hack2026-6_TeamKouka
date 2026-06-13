@@ -24,11 +24,69 @@ import { DRIVER_STATUS_LABEL, driverActionsFor, type DriverAction } from '../../
 import { DEMO_DELIVERY_COMPANY_ID } from '../../../lib/config';
 import { signOut } from '../../../features/auth';
 import type { ParcelStatus } from '../../../lib/database.types';
+import { supabase } from '../../../lib/supabase';
+import { getUnreadNotificationCount, subscribeNotifications } from '../../../features/notifications';
 
 // 配達員ホーム＝担当荷物リスト。status に応じたアクションボタンを出す。
 // 契約（Wave 0 確定）: fetchDriverParcels / startDelivery / reportDeliveryFailed,
 //   DRIVER_STATUS_LABEL / driverActionsFor, DEMO_DELIVERY_COMPANY_ID。
 // 遷移: match→/(app)/driver/agents, scan→/(app)/driver/scan（いずれも parcelId 付き）。
+// ヘッダー右に置くベル＋未読バッジ。タップで通知一覧へ。
+// フォーカス復帰時と notifications の Realtime 変化で未読数を更新する。
+function NotificationBell() {
+  const [count, setCount] = useState(0);
+  const mountedRef = useRef(true);
+  const userIdRef = useRef<string | null>(null);
+
+  const refresh = useCallback(async () => {
+    try {
+      const c = await getUnreadNotificationCount();
+      if (mountedRef.current) setCount(c);
+    } catch {
+      // 取得失敗時はバッジを変えない（前回値を維持）。
+    }
+  }, []);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    let unsubscribe: (() => void) | null = null;
+    (async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user || !mountedRef.current) return;
+      userIdRef.current = user.id;
+      refresh();
+      unsubscribe = subscribeNotifications(user.id, () => refresh(), 'bell');
+    })();
+    return () => {
+      mountedRef.current = false;
+      if (unsubscribe) unsubscribe();
+    };
+  }, [refresh]);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (userIdRef.current) refresh();
+    }, [refresh]),
+  );
+
+  return (
+    <TouchableOpacity
+      style={styles.bellButton}
+      onPress={() => router.push('/(app)/notifications')}
+      accessibilityLabel={`通知${count > 0 ? `（未読${count}件）` : ''}`}
+    >
+      <Ionicons name="notifications-outline" size={22} color={colors.driver} />
+      {count > 0 && (
+        <View style={styles.bellBadge}>
+          <Text style={styles.bellBadgeText}>{count > 99 ? '99+' : count}</Text>
+        </View>
+      )}
+    </TouchableOpacity>
+  );
+}
+
 export default function DriverHomeScreen() {
   const [parcels, setParcels] = useState<DriverParcel[]>([]);
   const [loading, setLoading] = useState(true);
@@ -144,10 +202,13 @@ export default function DriverHomeScreen() {
     <SafeAreaView style={styles.safe}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>配達員ホーム</Text>
-        <TouchableOpacity onPress={handleSignOut} style={styles.signOutButton} accessibilityLabel="ログアウト">
-          <Ionicons name="log-out-outline" size={20} color={colors.gray} />
-          <Text style={styles.signOutText}>ログアウト</Text>
-        </TouchableOpacity>
+        <View style={styles.headerRight}>
+          <NotificationBell />
+          <TouchableOpacity onPress={handleSignOut} style={styles.signOutButton} accessibilityLabel="ログアウト">
+            <Ionicons name="log-out-outline" size={20} color={colors.gray} />
+            <Text style={styles.signOutText}>ログアウト</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {loading ? (
@@ -263,6 +324,21 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.sm,
   },
   headerTitle: { fontSize: 18, fontWeight: '700', color: colors.ink },
+  headerRight: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  bellButton: { padding: 4 },
+  bellBadge: {
+    position: 'absolute',
+    top: -2,
+    right: -2,
+    minWidth: 16,
+    height: 16,
+    paddingHorizontal: 3,
+    borderRadius: 8,
+    backgroundColor: '#DC2626',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bellBadgeText: { color: colors.white, fontSize: 10, fontWeight: '700' },
   signOutButton: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, paddingVertical: spacing.xs },
   signOutText: { fontSize: 13, fontWeight: '600', color: colors.gray },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.md, padding: spacing.xl },

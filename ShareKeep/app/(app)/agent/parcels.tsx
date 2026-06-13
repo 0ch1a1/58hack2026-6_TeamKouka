@@ -11,6 +11,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { router } from 'expo-router';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import QRCode from 'react-native-qrcode-svg';
 import { supabase } from '../../../lib/supabase';
@@ -202,6 +203,19 @@ export default function AgentParcelsScreen() {
                   </TouchableOpacity>
                 </View>
               )}
+
+              <TouchableOpacity
+                style={styles.messageButton}
+                onPress={() =>
+                  router.push({
+                    pathname: '/(app)/messages/[parcelId]',
+                    params: { parcelId: item.parcelId },
+                  })
+                }
+              >
+                <Ionicons name="chatbubbles-outline" size={16} color={colors.green} />
+                <Text style={styles.messageButtonText}>メッセージ</Text>
+              </TouchableOpacity>
             </Card>
             );
           }}
@@ -270,6 +284,8 @@ const styles = StyleSheet.create({
   qrButtonText: { fontSize: 13, fontWeight: '600', color: colors.green },
   scanButton: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 10, borderRadius: 10, backgroundColor: colors.green },
   scanButtonText: { fontSize: 13, fontWeight: '600', color: '#FFFFFF' },
+  messageButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 10, borderRadius: 10, borderWidth: 1.5, borderColor: colors.green },
+  messageButtonText: { fontSize: 13, fontWeight: '600', color: colors.green },
   emptyText: { fontSize: 15, color: '#9CA3AF' },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', alignItems: 'center', justifyContent: 'center' },
   modalContent: { backgroundColor: '#FFFFFF', borderRadius: 24, padding: 28, alignItems: 'center', gap: 12, width: '80%' },

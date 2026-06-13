@@ -164,6 +164,18 @@ export default function PickupReadyScreen() {
           <Ionicons name="qr-code-outline" size={20} color={colors.green} />
           <Text style={styles.secondaryButtonText}>引き渡し確認QRを表示</Text>
         </TouchableOpacity>
+
+        {parcelId ? (
+          <TouchableOpacity
+            style={styles.secondaryButton}
+            onPress={() =>
+              router.push({ pathname: '/(app)/messages/[parcelId]', params: { parcelId } })
+            }
+          >
+            <Ionicons name="chatbubbles-outline" size={20} color={colors.green} />
+            <Text style={styles.secondaryButtonText}>メッセージ</Text>
+          </TouchableOpacity>
+        ) : null}
       </View>
 
       <Modal visible={qrVisible} transparent animationType="fade">

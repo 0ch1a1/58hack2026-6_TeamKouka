@@ -44,6 +44,12 @@ function formatCompleted(count: number | null | undefined): string {
   return `完了 ${typeof count === 'number' ? count : 0} 件`;
 }
 
+// 平均評価（例: ★4.2 (12)）。評価が無い（avg_rating が null / 件数0）なら「評価なし」。
+function formatRating(avg: number | null | undefined, count: number | null | undefined): string {
+  if (typeof avg !== 'number' || !Number.isFinite(avg) || !count) return '評価なし';
+  return `★${avg.toFixed(1)} (${count})`;
+}
+
 // start_time〜end_time を表示用に。HH:MM:SS → HH:MM へ丸める。
 function formatTimeRange(start: string | null, end: string | null): string {
   const trim = (t: string | null) => (t ? t.slice(0, 5) : null);
@@ -200,6 +206,7 @@ export default function DriverAgentsScreen() {
         <InfoRow label="対応時間" value={formatTimeRange(item.start_time, item.end_time)} />
         <InfoRow label="対応曜日" value={formatDays(item.available_days)} />
         <InfoRow label="実績" value={formatCompleted(item.completed_deliveries)} />
+        <InfoRow label="評価" value={formatRating(item.avg_rating, item.review_count)} />
 
         <TouchableOpacity
           style={[styles.assignButton, busy && styles.assignButtonDisabled]}
