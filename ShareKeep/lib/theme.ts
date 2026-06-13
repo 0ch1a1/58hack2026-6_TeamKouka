@@ -27,3 +27,13 @@ export const radius = {
   card: 16,
   button: 14,
 } as const;
+
+// 画面・カードで繰り返し使われる余白スケール。各画面の生数値（8/12/16/40 等）を集約する用。
+export const spacing = {
+  xs: 4,
+  sm: 8,
+  md: 12,
+  lg: 16,
+  xl: 24,
+  xxl: 40,
+} as const;
