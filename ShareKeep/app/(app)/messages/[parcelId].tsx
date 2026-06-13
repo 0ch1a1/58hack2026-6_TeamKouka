@@ -35,17 +35,23 @@ export default function MessagesScreen() {
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
   const listRef = useRef<FlatList<HandoverMessage>>(null);
+  // 取得の世代番号。別 parcel へ遷移した直後に古い fetch が解決して別チャットを
+  // 上書きするのを防ぐ。
+  const loadSeqRef = useRef(0);
 
   const load = useCallback(async () => {
     if (!parcelId) return;
+    const seq = ++loadSeqRef.current;
     try {
       const data = await fetchMessages(parcelId);
+      if (seq !== loadSeqRef.current) return; // 古い結果は捨てる
       setMessages(data);
       setError(null);
     } catch {
+      if (seq !== loadSeqRef.current) return;
       setError('メッセージの取得に失敗しました。');
     } finally {
-      setLoading(false);
+      if (seq === loadSeqRef.current) setLoading(false);
     }
   }, [parcelId]);
 
@@ -53,6 +59,12 @@ export default function MessagesScreen() {
     if (!parcelId) {
       setLoading(false);
       setError('荷物が指定されていません。');
+      return;
+    }
+    // deeplink 等で不正値が来ると Realtime filter / クエリが壊れるため UUID を検証。
+    if (!isValidUuid(parcelId)) {
+      setLoading(false);
+      setError('荷物IDが不正です。');
       return;
     }
 
@@ -141,6 +153,11 @@ export default function MessagesScreen() {
           />
         )}
 
+        {/* 会話がある状態での送信/取得エラーは中央表示に出ないため、入力欄上にバナー表示 */}
+        {error && messages.length > 0 ? (
+          <Text style={styles.inlineError}>{error}</Text>
+        ) : null}
+
         <View style={styles.inputBar}>
           <TextInput
             style={styles.input}
@@ -168,6 +185,10 @@ export default function MessagesScreen() {
   );
 }
 
+function isValidUuid(s: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s);
+}
+
 function formatTime(iso: string) {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return '';
@@ -182,6 +203,7 @@ const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
   empty: { paddingTop: 80 },
   errorText: { fontSize: 15, color: colors.gray },
+  inlineError: { fontSize: 12, color: '#DC2626', textAlign: 'center', paddingVertical: 4, paddingHorizontal: 16 },
   listContent: { paddingHorizontal: 16, paddingVertical: 12, gap: 8, flexGrow: 1 },
   bubbleRow: { flexDirection: 'row' },
   rowMine: { justifyContent: 'flex-end' },

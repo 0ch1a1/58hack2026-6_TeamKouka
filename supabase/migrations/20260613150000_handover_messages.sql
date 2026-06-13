@@ -60,7 +60,14 @@ create policy handover_messages_insert on public.handover_messages
 -- ---------------------------------------------------------------------------
 -- Realtime
 -- ---------------------------------------------------------------------------
-alter publication supabase_realtime add table public.handover_messages;
+-- publication への追加は冪等でない（既に登録済みだとエラーで migration が失敗）。
+-- 重複登録時の duplicate_object を握りつぶして冪等にする。
+do $$
+begin
+  alter publication supabase_realtime add table public.handover_messages;
+exception
+  when duplicate_object then null;
+end $$;
 
 -- =============================================================================
 -- NOTE: この migration は未適用。レビュー後に手動で適用すること。
