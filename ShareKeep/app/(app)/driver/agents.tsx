@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef, Component, type ReactNode } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -11,11 +11,8 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, router } from 'expo-router';
-// react-native-maps は default export（MapView）と名前付き export（Marker）を併用。
-// 端末/環境によっては地図ネイティブモジュールが無く描画に失敗するため、
-// MapView は専用コンポーネントに切り出し、地図が無くてもリストで割り当て可能にする。
-import MapView, { Marker } from 'react-native-maps';
-import { colors, cardShadow, radius, spacing } from '../../../lib/theme';
+import { DriverAgentMap } from '../../../components/DriverAgentMap';
+import { colors, radius, spacing } from '../../../lib/theme';
 import { FALLBACK_LOCATION } from '../../../lib/constants';
 import { ScreenHeader, Card, InfoRow, EmptyState } from '../../../components/ui';
 import { getAgentLocations, assignAgentToParcel } from '../../../features/parcels';
@@ -253,14 +250,13 @@ export default function DriverAgentsScreen() {
           ListHeaderComponent={
             <View style={styles.mapSection}>
               {!mapFailed && mapAgents.length > 0 ? (
-                <MapErrorBoundary onError={() => setMapFailed(true)}>
-                  <MapViewInner
-                    region={initialRegion}
-                    agents={mapAgents}
-                    selectedId={selectedId}
-                    onSelect={confirmAssign}
-                  />
-                </MapErrorBoundary>
+                <DriverAgentMap
+                  region={initialRegion}
+                  agents={mapAgents}
+                  selectedId={selectedId}
+                  onSelect={confirmAssign}
+                  onError={() => setMapFailed(true)}
+                />
               ) : (
                 <View style={styles.mapFallback}>
                   <Ionicons name="map-outline" size={28} color={colors.grayLight} />
@@ -280,76 +276,12 @@ export default function DriverAgentsScreen() {
   );
 }
 
-// MapView のマウント/レンダリング失敗（例: Expo Go で地図ネイティブモジュールが
-// 未登録、AIRMap 未対応など）を React の Error Boundary で捕捉し、親へ通知する。
-// try/catch では JSX 生成時の同期例外しか捕まえられず、子のレンダー/コミット段階の
-// 例外は握れないため、クラスコンポーネントの getDerivedStateFromError / componentDidCatch を使う。
-// 注意: JS の Error Boundary はネイティブ層のハードクラッシュまでは捕捉できない。
-//      その場合に備え、地図はあくまで補助でリスト割り当てが常に機能する構成にしている。
-class MapErrorBoundary extends Component<
-  { onError: () => void; children: ReactNode },
-  { hasError: boolean }
-> {
-  state = { hasError: false };
-
-  static getDerivedStateFromError() {
-    return { hasError: true };
-  }
-
-  // render フェーズではなく lifecycle で親へ通知（render 中の setState を避ける）。
-  componentDidCatch() {
-    this.props.onError();
-  }
-
-  render() {
-    if (this.state.hasError) return null;
-    return this.props.children;
-  }
-}
-
-// 地図本体。例外隔離は上位の MapErrorBoundary が担う。
-function MapViewInner({
-  region,
-  agents,
-  selectedId,
-  onSelect,
-}: {
-  region: { latitude: number; longitude: number; latitudeDelta: number; longitudeDelta: number };
-  agents: AgentLocation[];
-  selectedId: string | null;
-  onSelect: (a: AgentLocation) => void;
-}) {
-  return (
-    <View style={styles.mapWrap}>
-      <MapView style={styles.map} initialRegion={region}>
-        {agents.map((a) => (
-          <Marker
-            key={a.user_id}
-            coordinate={{ latitude: a.latitude, longitude: a.longitude }}
-            title={a.full_name}
-            description={a.address}
-            pinColor={a.user_id === selectedId ? '#1A7A4C' : undefined}
-            onPress={() => onSelect(a)}
-          />
-        ))}
-      </MapView>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   emptyState: { paddingTop: 80 },
   listContent: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xxl, gap: spacing.md },
   mapSection: { paddingTop: spacing.sm, paddingBottom: spacing.md, gap: spacing.sm },
-  mapWrap: {
-    height: 240,
-    borderRadius: radius.card,
-    overflow: 'hidden',
-    ...cardShadow,
-  },
-  map: { flex: 1 },
   mapFallback: {
     height: 120,
     borderRadius: radius.card,
