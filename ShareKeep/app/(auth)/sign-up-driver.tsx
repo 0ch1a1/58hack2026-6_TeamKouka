@@ -146,7 +146,7 @@ export default function SignUpDriverScreen() {
           label="配達員として登録する"
           onPress={handleSignUp}
           loading={loading}
-          style={{ height: 52, width: '100%', marginTop: 16, backgroundColor: colors.driver, borderRadius: 12 }}
+          style={styles.primaryButton}
         />
       </ScrollView>
     </KeyboardAvoidingView>
@@ -193,4 +193,5 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
   },
+  primaryButton: { height: 52, width: '100%', marginTop: 16, backgroundColor: colors.driver, borderRadius: 12 },
 });

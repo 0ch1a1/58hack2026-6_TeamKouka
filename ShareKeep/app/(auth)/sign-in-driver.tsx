@@ -75,7 +75,7 @@ export default function SignInDriverScreen() {
           label="ログイン"
           onPress={handleSignIn}
           loading={loading}
-          style={{ height: 52, width: '100%', marginTop: 8, backgroundColor: colors.driver, borderRadius: 12 }}
+          style={styles.primaryButton}
         />
 
         <View style={styles.footer}>
@@ -124,4 +124,5 @@ const styles = StyleSheet.create({
   footer: { flexDirection: 'row', alignItems: 'center', marginTop: 24, gap: 4 },
   footerText: { fontSize: 14, color: colors.gray },
   linkText: { fontSize: 14, fontWeight: '600', color: colors.green },
+  primaryButton: { height: 52, width: '100%', marginTop: 8, backgroundColor: colors.driver, borderRadius: 12 },
 });

@@ -227,7 +227,7 @@ export default function AgentProfileScreen() {
           icon="checkmark-circle-outline"
           loading={saving}
           onPress={handleSave}
-          style={{ marginTop: 8 }}
+          style={styles.saveButton}
         />
       </ScrollView>
     </SafeAreaView>
@@ -251,4 +251,5 @@ const styles = StyleSheet.create({
   timeRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   timeInput: { flex: 1, textAlign: 'center' },
   timeSeparator: { fontSize: 16, color: '#6B7280', fontWeight: '600' },
+  saveButton: { marginTop: 8 },
 });
