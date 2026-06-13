@@ -14,6 +14,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import * as Location from 'expo-location';
 import { colors } from '../../../lib/theme';
 import { ScreenHeader, Card, PrimaryButton } from '../../../components/ui';
+import { supabase } from '../../../lib/supabase';
 import { isStoredAtAgent } from '../../../lib/status';
 import {
   matchNearbyAgent,
@@ -127,7 +128,17 @@ export default function MatchingScreen() {
       return () => stopDots();
     }
 
+    // この effect 世代の中断フラグ。parcelId 変更で旧世代が走り続けても
+    // stale な結果で setState しないよう、共有 ref とは別にローカルで持つ。
+    let cancelled = false;
+
     const start = async () => {
+      // 0. 受取人=ログイン中ユーザ。recommendation_logs.recipient_id を埋めるため送る
+      //    （送らないと RLS の「本人のみ参照」経路が成立しない）。
+      const { data: { user } } = await supabase.auth.getUser();
+      if (cancelled) return;
+      const recipientId = user?.id;
+
       // 1. 受取人の現在地を取得（権限拒否時は待機画面のまま・クラッシュさせない）
       let position: Location.LocationObject;
       try {
@@ -141,7 +152,7 @@ export default function MatchingScreen() {
         Alert.alert('エラー', '現在地の取得に失敗しました。位置情報を有効にしてからお試しください。');
         return;
       }
-      if (cancelledRef.current) return;
+      if (cancelled) return;
 
       const { latitude, longitude } = position.coords;
 
@@ -155,12 +166,13 @@ export default function MatchingScreen() {
       try {
         const agents = await recommendAgents({
           parcelId,
+          recipientId,
           latitude,
           longitude,
           radiusMeters: SEARCH_RADIUS_M,
           topK: 8,
         });
-        if (cancelledRef.current) return;
+        if (cancelled) return;
         if (agents.length === 0) {
           // 圏内に候補なし → 自動マッチも空振りする可能性が高いが、従来挙動に委ねる
           await fallbackAutoMatch(latitude, longitude);
@@ -170,7 +182,9 @@ export default function MatchingScreen() {
         setSelectedId(agents[0]?.agent_id ?? null);
         setMode('select');
       } catch {
-        // サービス障害時はデモを止めないため自動マッチへ
+        // サービス障害時はデモを止めないため自動マッチへ。
+        // 画面離脱後に reject した場合は割り当てを走らせない。
+        if (cancelled) return;
         await fallbackAutoMatch(latitude, longitude);
       }
     };
@@ -178,6 +192,7 @@ export default function MatchingScreen() {
     void start();
 
     return () => {
+      cancelled = true;
       cancelledRef.current = true;
       if (unsubscribeRef.current) unsubscribeRef.current();
       stopDots();
@@ -198,6 +213,7 @@ export default function MatchingScreen() {
         distanceMeters: chosen.distance_meters,
       });
     } catch {
+      if (cancelledRef.current) return;
       setAssigning(false);
       Alert.alert('エラー', '代理人の確定に失敗しました。もう一度お試しください。');
       return;
@@ -210,6 +226,8 @@ export default function MatchingScreen() {
       // ログ更新失敗は無視（推薦ログが無い／RLS 等。割り当て自体は成功済み）
     }
 
+    // 確定中に画面を離れた場合は state 更新・購読開始しない（beginWaiting も内部で弾く）
+    if (cancelledRef.current) return;
     setAssigning(false);
     beginWaiting();
   };

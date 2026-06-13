@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class RecommendRequest(BaseModel):
@@ -28,6 +28,9 @@ class RecommendationItem(BaseModel):
 
 
 class RecommendResponse(BaseModel):
+    # `model_version` は pydantic v2 の保護名前空間 `model_` と衝突するため抑止。
+    model_config = ConfigDict(protected_namespaces=())
+
     model_version: str
     generated_at: datetime
     recommendations: list[RecommendationItem]
@@ -43,6 +46,8 @@ class FeedbackResponse(BaseModel):
 
 
 class RetrainResponse(BaseModel):
+    model_config = ConfigDict(protected_namespaces=())
+
     ok: bool
     model_version: str
     train_auc: float | None = None
@@ -51,6 +56,8 @@ class RetrainResponse(BaseModel):
 
 
 class HealthResponse(BaseModel):
+    model_config = ConfigDict(protected_namespaces=())
+
     ok: bool
     model_version: str
     fallback: bool
