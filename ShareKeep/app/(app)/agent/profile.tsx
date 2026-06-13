@@ -64,8 +64,10 @@ export default function AgentProfileScreen() {
   };
 
   const handleSave = async () => {
-    if (!postalCode || !address) {
-      Alert.alert('入力エラー', '郵便番号と住所は必須です。');
+    // 郵便番号はジオコ精度向上のための任意入力。保存後は address（display_name）に
+    // 畳まれ再表示時に復元できないため、必須にすると既存代理人の再保存を妨げる。住所のみ必須。
+    if (!address) {
+      Alert.alert('入力エラー', '住所は必須です。');
       return;
     }
     if (selectedDays.length === 0) {
@@ -134,9 +136,7 @@ export default function AgentProfileScreen() {
           <Text style={styles.sectionTitle}>受取場所</Text>
 
           <View style={styles.field}>
-            <Text style={styles.label}>
-              郵便番号 <Text style={styles.required}>*</Text>
-            </Text>
+            <Text style={styles.label}>郵便番号（任意）</Text>
             <TextInput
               style={styles.input}
               placeholder="例: 150-0001"

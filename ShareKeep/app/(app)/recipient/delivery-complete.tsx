@@ -9,7 +9,6 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
-import { supabase } from '../../../lib/supabase';
 import { fetchParcel } from '../../../features/parcels';
 import { colors } from '../../../lib/theme';
 import { PrimaryButton, Card, InfoRow } from '../../../components/ui';
@@ -17,7 +16,6 @@ import { PrimaryButton, Card, InfoRow } from '../../../components/ui';
 type Result = {
   trackingNo: string;
   co2Saved: number;
-  pointsEarned: number;
 };
 
 export default function DeliveryCompleteScreen() {
@@ -30,34 +28,16 @@ export default function DeliveryCompleteScreen() {
 
     const fetchData = async () => {
       try {
-        const { data: { user } } = await supabase.auth.getUser();
-
-        // point_transactions には feature 関数がないため直接読みのまま残置。
-        // RLS が無い前提でも他人のポイントを表示しないよう user_id で必ず絞る（B4 バグ修正）。
-        // 報酬の付与先は代理人（transaction_type='proxy_delivery_complete'）であり、
-        // 受取人自身の行は通常0件になりうる点に注意。
-        const [parcel, pointRes] = await Promise.all([
-          fetchParcel(parcelId),
-          user
-            ? supabase
-                .from('point_transactions')
-                .select('points')
-                .eq('user_id', user.id)
-                .eq('transaction_type', 'proxy_delivery_complete')
-                .order('created_at', { ascending: false })
-                .limit(1)
-                .maybeSingle()
-            : Promise.resolve({ data: null }),
-        ]);
-
+        // ポイント（報酬）は代理人にのみ付与され受取人は0件のため、受取人の完了画面では
+        // ポイントを表示しない（CO2削減貢献を主表示）。よって parcel 取得のみ。
+        const parcel = await fetchParcel(parcelId);
         setResult({
           trackingNo: parcel?.tracking_no ?? '—',
           co2Saved: Number(parcel?.co2_saved_kg ?? 0),
-          pointsEarned: pointRes.data?.points ?? 0,
         });
       } catch {
         // 取得失敗時も結果画面はデフォルト表示で継続（既存UXを維持）
-        setResult({ trackingNo: '—', co2Saved: 0, pointsEarned: 0 });
+        setResult({ trackingNo: '—', co2Saved: 0 });
       } finally {
         setLoading(false);
       }
@@ -99,17 +79,6 @@ export default function DeliveryCompleteScreen() {
         </Card>
 
         <Card>
-          <Text style={styles.cardSectionTitle}>獲得報酬</Text>
-          <View style={styles.rewardRow}>
-            <View style={styles.rewardItem}>
-              <Ionicons name="gift" size={28} color={colors.green} />
-              <Text style={styles.rewardValue}>{result?.pointsEarned ?? 0}</Text>
-              <Text style={styles.rewardLabel}>ポイント</Text>
-            </View>
-          </View>
-        </Card>
-
-        <Card>
           <Text style={styles.cardSectionTitle}>荷物の情報</Text>
           <InfoRow label="追跡番号" value={result?.trackingNo ?? '—'} />
         </Card>
@@ -138,9 +107,5 @@ const styles = StyleSheet.create({
   co2TextWrap: { gap: 2 },
   co2Value: { fontSize: 28, fontWeight: '800', color: colors.green },
   co2Label: { fontSize: 13, color: colors.greenDark },
-  rewardRow: { flexDirection: 'row', alignItems: 'center' },
-  rewardItem: { flex: 1, alignItems: 'center', gap: 4, paddingVertical: 8 },
-  rewardValue: { fontSize: 24, fontWeight: '800', color: colors.ink },
-  rewardLabel: { fontSize: 13, color: colors.gray },
   primaryButton: { marginTop: 8 },
 });
