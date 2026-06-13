@@ -112,7 +112,10 @@ function AgentContent() {
       >
         <Text style={styles.actionButtonText}>プロファイルを設定する</Text>
       </TouchableOpacity>
-      <TouchableOpacity style={[styles.actionButton, { marginTop: 8 }]}>
+      <TouchableOpacity
+        style={[styles.actionButton, { marginTop: 8 }]}
+        onPress={() => router.push('/(app)/agent/parcels')}
+      >
         <Text style={styles.actionButtonText}>受取対応を確認する</Text>
       </TouchableOpacity>
     </View>
