@@ -42,3 +42,39 @@ export function isStoredAtAgent(s: ParcelStatus | string | null): boolean {
 export function isHandedOff(s: ParcelStatus | string | null): boolean {
   return s === 'handed_to_recipient' || s === 'completed';
 }
+
+// ===== 配達員（delivery_company）用 =====
+// 受取人リストは 3 状態に集約するが、配達員は生 status をそのまま見るため
+// DB status を 1:1 で日本語化する（toUIStatus とは別物・分離して持つ）。
+export const DRIVER_STATUS_LABEL: Record<ParcelStatus, string> = {
+  created: '配達前',
+  out_for_delivery: '配達中',
+  delivery_failed: '不在（代理受付待ち）',
+  agent_assigned: '代理人決定',
+  delivered_to_agent: '代理人へ受け渡し済み',
+  handed_to_recipient: '受取人へ引き渡し済み',
+  completed: '完了',
+};
+
+// 配達員画面で status に応じて出すアクション種別。画面側の分岐をここに集約。
+//   start  : 配達開始（created → out_for_delivery）
+//   fail   : 不在報告（out_for_delivery → delivery_failed）
+//   match  : 代理人を探す（delivery_failed → agent_assigned）
+//   scan   : 代理人QRを読む（agent_assigned → delivered_to_agent）
+//   none   : 配達員の操作は無い（受取人/代理人フェーズ）
+export type DriverAction = 'start' | 'fail' | 'match' | 'scan' | 'none';
+
+export function driverActionsFor(s: ParcelStatus | string | null): DriverAction[] {
+  switch (s) {
+    case 'created':
+      return ['start'];
+    case 'out_for_delivery':
+      return ['fail'];
+    case 'delivery_failed':
+      return ['match'];
+    case 'agent_assigned':
+      return ['scan'];
+    default:
+      return ['none'];
+  }
+}
