@@ -64,6 +64,8 @@ class Settings:
     rate_limit_per_min: int = 60
     rate_limit_burst: int = 10
     cache_ttl_seconds: int = 30
+    # 信頼できる前段プロキシ配下でのみ X-Forwarded-For を採用（既定はソケットIP＝詐称不可）。
+    trust_forwarded_for: bool = False
 
 
 def _env_bool(name: str, default: bool) -> bool:
@@ -97,4 +99,5 @@ def get_settings() -> Settings:
         rate_limit_per_min=int(os.getenv("RATE_LIMIT_PER_MIN", "60")),
         rate_limit_burst=int(os.getenv("RATE_LIMIT_BURST", "10")),
         cache_ttl_seconds=int(os.getenv("CACHE_TTL_SECONDS", "30")),
+        trust_forwarded_for=_env_bool("TRUST_FORWARDED_FOR", False),
     )

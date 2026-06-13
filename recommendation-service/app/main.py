@@ -48,25 +48,36 @@ _bearer = HTTPBearer(auto_error=False)
 
 
 def _client_ip(request: Request) -> str:
-    forwarded_for = request.headers.get("x-forwarded-for")
-    if forwarded_for:
-        first_ip = forwarded_for.split(",", 1)[0].strip()
-        if first_ip:
-            return first_ip
+    # X-Forwarded-For はクライアントが詐称可能。信頼できる前段プロキシがある場合のみ
+    # 採用する（TRUST_FORWARDED_FOR=true）。既定はソケットのピアIP＝詐称不可。
+    if settings.trust_forwarded_for:
+        forwarded_for = request.headers.get("x-forwarded-for")
+        if forwarded_for:
+            first_ip = forwarded_for.split(",", 1)[0].strip()
+            if first_ip:
+                return first_ip
     return request.client.host if request.client else "unknown"
 
 
 def _recommend_cache_key(
     request: RecommendRequest, recipient_id: str | None
 ) -> str | None:
+    # 起点（座標 or recipient）を決定。どちらも無ければキャッシュ不可。
     if request.latitude is not None and request.longitude is not None:
-        return (
-            f"{round(request.latitude, 3)}:{round(request.longitude, 3)}:"
-            f"{request.radius_m}:{request.top_k}"
-        )
-    if request.latitude is None and request.longitude is None and recipient_id:
-        return f"rid:{recipient_id}:{request.radius_m}:{request.top_k}"
-    return None
+        origin = f"{round(request.latitude, 3)}:{round(request.longitude, 3)}"
+    elif request.latitude is None and request.longitude is None and recipient_id:
+        origin = f"rid:{recipient_id}"
+    else:
+        return None
+
+    # parcel_id をキーに含める：別 parcel は必ず MISS にして recommendation_logs の
+    # 挿入をスキップさせない（/recommend→log→/feedback の学習経路を壊さない）。
+    # 同一 parcel の再表示だけが HIT する（ログは初回で挿入済み＝二重挿入も防ぐ）。
+    parcel = str(request.parcel_id) if request.parcel_id else "-"
+    # target_at はランキング（time_score/day_match 等）に効くのでキーに含める。
+    # 未指定同士は now 基準で共有（短 TTL 内の微差は許容＝キャッシュの趣旨）。
+    target_at = request.target_at.isoformat() if request.target_at else "now"
+    return f"{parcel}:{origin}:{request.radius_m}:{request.top_k}:{target_at}"
 
 
 @app.middleware("http")

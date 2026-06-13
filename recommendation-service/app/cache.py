@@ -33,6 +33,8 @@ class TTLCache:
             if expires_at <= now:
                 self._items.pop(key, None)
                 return None
+            # LRU: 参照されたエントリを末尾へ（eviction は先頭=最も使われていない順）
+            self._items.move_to_end(key)
             return value
 
     def set(self, key: str, value: Any) -> None:
