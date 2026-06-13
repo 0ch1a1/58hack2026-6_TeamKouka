@@ -10,6 +10,7 @@ import {
   assignAgentToParcel,
   subscribeParcel,
   fetchParcel,
+  fetchRecipientCoordinates,
 } from '../../../features/parcels';
 import {
   recommendAgents,
@@ -97,22 +98,41 @@ export function useMatchingLogic(parcelId: string | undefined): MatchingLogic {
       if (cancelled) return;
       const recipientId = user?.id;
 
-      // 1. 受取人の現在地を取得（権限拒否時は待機画面のまま・クラッシュさせない）
-      let position: Location.LocationObject;
-      try {
-        const { status } = await Location.requestForegroundPermissionsAsync();
-        if (status !== 'granted') {
-          Alert.alert('位置情報の許可が必要です', '近くの代理人を探すために位置情報の利用を許可してください。');
-          return;
+      // 1. 距離の起点を決める。登録済みの自宅座標を優先し（0タップ・現在地に依存しない）、
+      //    未登録のときだけ端末GPSの現在地にフォールバックする。
+      let latitude: number;
+      let longitude: number;
+
+      let home: { latitude: number; longitude: number } | null = null;
+      if (recipientId) {
+        try {
+          home = await fetchRecipientCoordinates(recipientId);
+        } catch {
+          home = null; // 取得失敗時はGPSにフォールバック
         }
-        position = await Location.getCurrentPositionAsync({});
-      } catch {
-        Alert.alert('エラー', '現在地の取得に失敗しました。位置情報を有効にしてからお試しください。');
-        return;
       }
       if (cancelled) return;
 
-      const { latitude, longitude } = position.coords;
+      if (home) {
+        latitude = home.latitude;
+        longitude = home.longitude;
+      } else {
+        // 現在地を取得（権限拒否時は待機画面のまま・クラッシュさせない）
+        try {
+          const { status } = await Location.requestForegroundPermissionsAsync();
+          if (status !== 'granted') {
+            Alert.alert('位置情報の許可が必要です', '近くの代理人を探すために位置情報の利用を許可してください。');
+            return;
+          }
+          const position = await Location.getCurrentPositionAsync({});
+          if (cancelled) return;
+          latitude = position.coords.latitude;
+          longitude = position.coords.longitude;
+        } catch {
+          Alert.alert('エラー', '現在地の取得に失敗しました。位置情報を有効にしてからお試しください。');
+          return;
+        }
+      }
 
       // 2. 推薦サービスが使えるなら候補をスコア順で取得 → 選択 UI。
       //    未設定・失敗・候補ゼロ時は従来の自動マッチへフォールバック。

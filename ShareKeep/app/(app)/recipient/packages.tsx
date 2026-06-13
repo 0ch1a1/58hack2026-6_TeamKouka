@@ -127,6 +127,16 @@ export default function PackagesScreen() {
     <SafeAreaView style={styles.safe}>
       <ScreenHeader title="荷物一覧" />
 
+      <TouchableOpacity
+        style={styles.homeAddressRow}
+        onPress={() => router.push('/(app)/recipient/home-address')}
+        activeOpacity={0.7}
+      >
+        <Ionicons name="home-outline" size={16} color={colors.green} />
+        <Text style={styles.homeAddressText}>自宅住所を登録 / 編集</Text>
+        <Ionicons name="chevron-forward" size={16} color={colors.grayLight} />
+      </TouchableOpacity>
+
       <View style={styles.filterRow}>
         {FILTER_OPTIONS.map(opt => (
           <TouchableOpacity
@@ -250,6 +260,8 @@ function PackageCard({ pkg }: { pkg: Package }) {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
+  homeAddressRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginHorizontal: 16, marginBottom: 12, paddingHorizontal: 14, paddingVertical: 10, backgroundColor: colors.white, borderRadius: 12, borderWidth: 1, borderColor: colors.border },
+  homeAddressText: { flex: 1, fontSize: 14, fontWeight: '600', color: colors.ink },
   filterRow: { flexDirection: 'row', gap: 8, paddingHorizontal: 16, paddingBottom: 12, flexWrap: 'wrap' },
   filterChip: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20, backgroundColor: colors.white, borderWidth: 1, borderColor: colors.border },
   filterChipActive: { backgroundColor: colors.green, borderColor: colors.green },

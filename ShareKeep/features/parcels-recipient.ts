@@ -3,6 +3,63 @@ import type { Parcel } from './parcels-types'
 
 // 受取人（recipient）向けの parcel API。
 
+// 受取人の自宅プロファイル（距離の起点）。recipient_profiles に対応。
+export type RecipientHome = {
+  address: string | null
+  address_detail: string | null
+}
+
+export type RecipientCoordinates = {
+  latitude: number
+  longitude: number
+}
+
+// 自宅住所＋座標を保存（距離の起点）。座標はクライアント側（GPS or ジオコーディング）で解決して渡す。
+export async function upsertRecipientProfile(params: {
+  userId: string
+  address: string
+  latitude: number
+  longitude: number
+  addressDetail?: string | null
+}) {
+  const { error } = await supabase.rpc('upsert_recipient_profile', {
+    p_user_id: params.userId,
+    p_address: params.address,
+    p_lat: params.latitude,
+    p_lng: params.longitude,
+    p_address_detail: params.addressDetail ?? null,
+  })
+
+  if (error) throw error
+}
+
+// 登録済みの自宅住所（表示用テキスト）。未登録なら null。RLS により本人の行のみ。
+export async function fetchRecipientHome(userId: string): Promise<RecipientHome | null> {
+  const { data, error } = await supabase
+    .from('recipient_profiles')
+    .select('address, address_detail')
+    .eq('user_id', userId)
+    .maybeSingle()
+
+  if (error) throw error
+  return (data as RecipientHome | null) ?? null
+}
+
+// 登録済みの自宅座標（距離の起点）。get_recipient_coordinates RPC（lat/lng を返す）経由。
+// 未登録なら null。
+export async function fetchRecipientCoordinates(
+  recipientId: string,
+): Promise<RecipientCoordinates | null> {
+  const { data, error } = await supabase.rpc('get_recipient_coordinates', {
+    p_recipient_id: recipientId,
+  })
+
+  if (error) throw error
+  const row = Array.isArray(data) ? data[0] : data
+  if (!row || row.lat == null || row.lng == null) return null
+  return { latitude: Number(row.lat), longitude: Number(row.lng) }
+}
+
 export async function createParcel(params: {
   recipientId: string
   deliveryCompanyId: string
