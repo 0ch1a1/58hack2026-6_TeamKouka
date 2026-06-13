@@ -1,11 +1,14 @@
-export type Role = 'recipient' | 'agent' | 'driver';
+// バックエンド user_role enum と一致（A4）。'driver' は廃止 → 'delivery_company'
+export type Role = 'recipient' | 'agent' | 'delivery_company';
 
+// バックエンド parcel_status enum と一致（A4）。UI 3状態への変換は lib/status.ts を使う
 export type ParcelStatus =
-  | 'pending'
-  | 'waiting'
-  | 'matched'
-  | 'stored'
-  | 'delivering'
+  | 'created'
+  | 'out_for_delivery'
+  | 'delivery_failed'
+  | 'agent_assigned'
+  | 'delivered_to_agent'
+  | 'handed_to_recipient'
   | 'completed';
 
 export interface Profile {
