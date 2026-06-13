@@ -52,7 +52,7 @@
 - **概要**: メール+パスワードで登録・ログイン。受取人/代理人と配達員で導線を分ける。
 - **ロール**: 全ロール
 - **画面**: サインアップ、サインイン、配達員サインアップ/サインイン
-- **API**: `signUpRecipient` / `signUpWithProfile` / `signIn` / `signOut` / `getCurrentUser`
+- **API**: `signUpRecipient`（features/auth.ts）/ `signUpWithProfile`（**lib/auth.ts**・配達員含む全ロール）/ `signIn` / `signOut` / `getCurrentUser`
 - **データ**: `auth.users`, `profiles`
 - **受け入れ条件**: 登録後にプロフィール行が作られ、ログインでロール別ホームに着く。
 - **実装状況**: ✅（`app/(auth)/*`）
@@ -75,6 +75,7 @@
 - **API**: `createParcel` / `fetchMyParcels` / `fetchParcel` / `fetchDriverParcels` / `updateParcelStatus`（RPC側で履歴保存）
 - **データ**: `parcels`, `parcel_status_histories`
 - **実装状況**: ✅
+- **⚠️ 伝票番号の扱い**: 受取人画面（`packages.tsx`）に伝票番号入力欄はあるが、その値は現状 `createParcel`（引数は `recipientId` / `deliveryCompanyId` のみ）に渡らず、`tracking_no` はサーバ自動採番。「受取人が実際の伝票番号を登録する」要件を残すなら `createParcel` の引数追加が必要。
 
 #### F-PARCEL-02 ステータス定義 ✅
 - **遷移**: `created`(配達前) → `out_for_delivery`(配達中) → `delivery_failed`(不在/代理受付待ち) → `agent_assigned`(代理人決定) → `delivered_to_agent`(代理人キープ中) → `handed_to_recipient`/`completed`(引き渡し完了)
@@ -83,12 +84,13 @@
 
 ### 3.C 代理人プロフィール
 
-#### F-AGENTPROF-01 プロフィール編集・取得 ✅
+#### F-AGENTPROF-01 プロフィール編集・取得 🟡
 - **概要**: 住所/緯度経度/受取可能曜日/開始・終了時刻/緊急連絡先/優先設定の保存・取得。住所はジオコーディングで緯度経度化。
 - **画面**: 代理人プロフィール編集
 - **API**: `upsertAgentProfile` / `geocodeAgentAddress`
-- **データ**: `agent_profiles`
-- **実装状況**: ✅（`app/(app)/agent/profile.tsx`）
+- **データ**: `agent_profiles`（住所/曜日/時間）、緊急連絡先は `profiles.phone`
+- **実装状況**: 🟡 住所/曜日/時間は編集・取得とも実装済み。**緊急連絡先は保存のみ**（`profiles.phone` へ直更新するがフォームへ再取得しない）。**優先設定は未実装**（入力項目なし）。`app/(app)/agent/profile.tsx`
+- **残作業**: 緊急連絡先の再取得（編集時に既存値を表示）、優先設定の入力・保存。
 
 #### F-AGENTPROF-02 顔写真 ❌
 - **概要**: 任意の顔写真を Storage に保存し、受取人/配達員に表示。
@@ -100,13 +102,16 @@
 #### F-MATCH-01 近隣代理人検索 ✅
 - **概要**: 緯度経度・半径・受取可能時間で代理人を抽出。
 - **API**: `findNearbyAgents` / `getAgentLocations`（地図用に緯度経度・実績つき）
-- **実装状況**: ✅
+- **⚠️ 半径の注意**: コンセプトは「半径50m以内」だが、受取人 `matching.tsx` は実機GPS誤差を考慮し**デモ都合で `radiusMeters: 5000`（5km）**を渡している。本番の距離要件（50m/100m段階）は別途確定し、実値を合わせること。
+- **実装状況**: ✅（検索ロジック）
 
 #### F-MATCH-02 マッチング作成・割り当て ✅
-- **概要**: 荷物に代理人を割り当て、`delivery_matches` 作成、ステータスを `agent_assigned` へ、代理人へ通知。
-- **API**: `matchNearbyAgent` / `assignAgentToParcel`
+- **概要**: 荷物に代理人を割り当て、`delivery_matches` 作成、ステータスを `agent_assigned` へ、代理人へ通知（DB通知行の作成。通知一覧UI表示は F-NOTIF-01 で未強化）。
+- **API（画面別）**:
+  - 配達員マップ `driver/agents.tsx` → `getAgentLocations` + `assignAgentToParcel`（手動割り当て）
+  - 受取人 `matching.tsx` → `matchNearbyAgent`（近隣自動マッチ）
 - **データ**: `delivery_matches`
-- **実装状況**: ✅（配達員マップ画面 `driver/agents.tsx` から割り当て可能）
+- **実装状況**: ✅（割り当て自体）。通知は DB行作成までで、UI表示の強化は F-NOTIF-01 参照。
 
 #### F-MATCH-03 優先マッチング（事前指定→近隣） ❌
 - **概要**: 受取人が事前指定した代理人を最優先 → 同建物 → 半径50m → 100m の順で探索。受取可能曜日/時間/対応可否/保管可能数/トラブル履歴で判定。
@@ -205,14 +210,15 @@
 #### F-POINT-02 実績・レベル・育成ビジュアル 🟡
 - **概要**: 完了件数のインクリメント、レベル・実績の取得、レベルアップ判定。ホームの育成ビジュアル（木）に反映。
 - **データ**: `achievements`
-- **実装状況**: 🟡 ホームに木のビジュアルあり（XPは仮値）。実績取得APIとの接続は未。
+- **実装状況**: 🟡 ホームに木の育成ビジュアルあり。**XP/Points は仮値（`app/(app)/index.tsx` で `0` 固定・Supabase未接続）**。実績取得APIとの接続は未。
 
 ### 3.M CO2削減量
 
 #### F-CO2-01 CO2削減の計算・表示・集計 🟡
 - **概要**: 引き渡し完了時にCO2推定削減量を算出・保存。ユーザー別/代理人別/全体の集計。
 - **データ**: `co2_reduction_logs` / `parcels.co2_saved_kg`
-- **実装状況**: 🟡 完了画面に削減量表示（簡易/固定値寄り）。**集計API（個人別/全体）は未実装**。
+- **受け入れ条件**: 算出式・係数（例: 再配達1回 ≈ 0.5kg-CO2）・丸め・保存タイミングを明確に定義する（未定だと担当ごとに値がぶれる）。完了画面（`recipient/delivery-complete.tsx`）は `parcels.co2_saved_kg`（サーバ値）をそのまま表示しており、フロントに固定値ロジックは無い＝**算出はサーバ側の責務**。
+- **実装状況**: 🟡 完了画面に削減量表示あり。**算出式の確定・集計API（個人別/全体）は未実装**。
 
 ### 3.N トラブル・保管期限
 
@@ -287,3 +293,4 @@
 - **⚠️-01 配達員と配送会社IDの紐付け**: 現状 `delivery_company` ロールはあるが、配達員ユーザー→`delivery_companies.id` の正規紐付けが無く、配達員リストは `DEMO_DELIVERY_COMPANY_ID` 固定。`delivery_company_members` 等のテーブル or `profiles.delivery_company_id` 追加が必要。RLS で「自社の荷物のみ」を担保する設計も併せて要検討。
 - **⚠️-02 QR検証エラーの契約**: `verify-agent-qr` / `verify-recipient-qr` のエラーがメッセージ文字列依存で、フロントの分類（期限切れ/無効/通信失敗）が脆い。Edge Function 側で機械可読な `code` と対象 `parcel_id` を返す契約に寄せると、scan画面の整合チェック（別荷物QR誤読の検出）も堅牢化できる。
 - **⚠️-03 RLS の網羅確認**: 各ロールが必要な行だけ読める/書けることの確認。特に配達員ロールが `parcels` / `fetchParcel` を読めるか（scan の整合チェックに影響）。
+- **⚠️-04 サーバ側ロジックは本リポジトリ未追跡**: Edge Function / RPC / RLS（`supabase/` 配下）はこのリポジトリにソースが無い。本書の ✅/🟡 はフロント層（`features/` 呼び出し・画面）との整合で判定しており、**QR検証の冪等遷移・CO2算出・ポイント付与・RLS のサーバ側実装は別途検証が必要**。
