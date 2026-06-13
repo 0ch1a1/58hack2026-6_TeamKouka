@@ -73,10 +73,13 @@ export default function MatchingScreen() {
         if (cancelled) return;
 
         // 2. 現在地で近くの代理人を手配
+        // radiusMeters の既定は 50m（同一建物レベル）で、実機 GPS 誤差により
+        // 「代理人が見つからない（match=null）」事故になりやすいため明示的に広げる（B2）。
         await matchNearbyAgent({
           parcelId,
           latitude: position.coords.latitude,
           longitude: position.coords.longitude,
+          radiusMeters: 5000,
         });
       } catch {
         // 手配に失敗した場合は待っても遷移しないため、購読を開始せず終了する。

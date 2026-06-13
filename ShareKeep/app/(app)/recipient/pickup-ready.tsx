@@ -20,7 +20,6 @@ import { ScreenHeader, PrimaryButton, Card, InfoRow } from '../../../components/
 
 type AgentInfo = {
   name: string;
-  postalCode: string;
   address: string;
   floor: string;
 };
@@ -78,23 +77,23 @@ export default function PickupReadyScreen() {
       const agentId = m.agent_id as string | null;
       const agentName = m.profiles?.full_name ?? '不明';
 
-      // agent_profiles から住所を取得（user_id = agent_id, '|' 区切り）
-      let postalCode = '';
+      // agent_profiles から住所を取得（user_id = agent_id）。
+      // geocode-agent-address は address（ジオコ結果の display_name）と
+      // address_detail（部屋番号等）を分けて保存するため、旧 '|' 連結パースは廃止し
+      // 両カラムをそのまま読む（profile.tsx の保存形式に追従）。
       let address = '';
       let floor = '';
       if (agentId) {
         const { data: agentProfile } = await supabase
           .from('agent_profiles')
-          .select('address')
+          .select('address, address_detail')
           .eq('user_id', agentId)
           .maybeSingle();
-        const parts = ((agentProfile as any)?.address ?? '').split('|');
-        postalCode = parts[0] ?? '';
-        address = parts[1] ?? '';
-        floor = parts[2] ?? '';
+        address = (agentProfile as any)?.address ?? '';
+        floor = (agentProfile as any)?.address_detail ?? '';
       }
 
-      setAgent({ name: agentName, postalCode, address, floor });
+      setAgent({ name: agentName, address, floor });
       setLoading(false);
     };
 
@@ -146,9 +145,6 @@ export default function PickupReadyScreen() {
             </View>
             <View style={styles.agentInfo}>
               <Text style={styles.agentName}>{agent?.name ?? '—'}</Text>
-              {agent?.postalCode ? (
-                <Text style={styles.agentAddress}>〒{agent.postalCode}</Text>
-              ) : null}
               <Text style={styles.agentAddress}>{agent?.address || '—'}</Text>
               {agent?.floor ? (
                 <Text style={styles.agentAddress}>{agent.floor}</Text>
