@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, Component, type ReactNode } from 'react';
 import {
   View,
   Text,
@@ -36,6 +36,14 @@ function formatDays(days: string[] | null): string {
   return days.join('・');
 }
 
+// 型上は number だが RPC が null を返す可能性に備えた表示ヘルパ。
+function formatLevel(level: number | null | undefined): string {
+  return typeof level === 'number' ? `Lv.${level}` : 'Lv.—';
+}
+function formatCompleted(count: number | null | undefined): string {
+  return `完了 ${typeof count === 'number' ? count : 0} 件`;
+}
+
 // start_time〜end_time を表示用に。HH:MM:SS → HH:MM へ丸める。
 function formatTimeRange(start: string | null, end: string | null): string {
   const trim = (t: string | null) => (t ? t.slice(0, 5) : null);
@@ -48,17 +56,26 @@ function formatTimeRange(start: string | null, end: string | null): string {
 }
 
 // 有効な緯度経度を持つ代理人だけ地図ピンの対象にする。
+// finite かつ地理的範囲内（緯度 -90..90 / 経度 -180..180）。(0,0) のダミー値も除外する。
 function hasValidCoords(a: AgentLocation): boolean {
+  const { latitude: lat, longitude: lng } = a;
   return (
-    typeof a.latitude === 'number' &&
-    typeof a.longitude === 'number' &&
-    Number.isFinite(a.latitude) &&
-    Number.isFinite(a.longitude)
+    typeof lat === 'number' &&
+    typeof lng === 'number' &&
+    Number.isFinite(lat) &&
+    Number.isFinite(lng) &&
+    lat >= -90 &&
+    lat <= 90 &&
+    lng >= -180 &&
+    lng <= 180 &&
+    !(lat === 0 && lng === 0)
   );
 }
 
 export default function DriverAgentsScreen() {
-  const { parcelId } = useLocalSearchParams<{ parcelId?: string }>();
+  const { parcelId: rawParcelId } = useLocalSearchParams<{ parcelId?: string }>();
+  // Expo Router の search param は配列で返ることがあるため string に正規化。
+  const parcelId = typeof rawParcelId === 'string' && rawParcelId.length > 0 ? rawParcelId : undefined;
   const [agents, setAgents] = useState<AgentLocation[]>([]);
   const [loading, setLoading] = useState(true);
   const [assigningId, setAssigningId] = useState<string | null>(null);
@@ -112,14 +129,20 @@ export default function DriverAgentsScreen() {
     };
   })();
 
+  // 割り当て処理中の同期ガード（リストボタン・地図ピンの両経路で多重送信を防ぐ）。
+  const assigningRef = useRef(false);
+
   const doAssign = useCallback(
     async (agent: AgentLocation) => {
       if (!parcelId) {
         Alert.alert('エラー', '対象の荷物が指定されていません。');
         return;
       }
+      if (assigningRef.current) return;
+      assigningRef.current = true;
       try {
         setAssigningId(agent.user_id);
+        setSelectedId(agent.user_id); // 選択ハイライトは割り当て確定時にのみ更新（キャンセルでは残さない）
         await assignAgentToParcel({
           parcelId,
           agentId: agent.user_id,
@@ -132,15 +155,16 @@ export default function DriverAgentsScreen() {
         Alert.alert('エラー', '代理人の割り当てに失敗しました。');
       } finally {
         setAssigningId(null);
+        assigningRef.current = false;
       }
     },
     [parcelId],
   );
 
-  // 行/ピンの選択 → 確認ダイアログ → 割り当て。
+  // 行/ピンの選択 → 確認ダイアログ → 割り当て。処理中は無視（ピン経路もここを通す）。
   const confirmAssign = useCallback(
     (agent: AgentLocation) => {
-      setSelectedId(agent.user_id);
+      if (assigningRef.current) return;
       Alert.alert(
         'この代理人に割り当てますか？',
         `${agent.full_name}\n${agent.address}`,
@@ -167,7 +191,7 @@ export default function DriverAgentsScreen() {
           </View>
           <View style={styles.levelBadge}>
             <Ionicons name="star" size={12} color={colors.driver} />
-            <Text style={styles.levelText}>Lv.{item.level}</Text>
+            <Text style={styles.levelText}>{formatLevel(item.level)}</Text>
           </View>
         </View>
 
@@ -175,7 +199,7 @@ export default function DriverAgentsScreen() {
         <InfoRow label="エリア" value={item.address} />
         <InfoRow label="対応時間" value={formatTimeRange(item.start_time, item.end_time)} />
         <InfoRow label="対応曜日" value={formatDays(item.available_days)} />
-        <InfoRow label="実績" value={`完了 ${item.completed_deliveries} 件`} />
+        <InfoRow label="実績" value={formatCompleted(item.completed_deliveries)} />
 
         <TouchableOpacity
           style={[styles.assignButton, busy && styles.assignButtonDisabled]}
@@ -219,13 +243,14 @@ export default function DriverAgentsScreen() {
           ListHeaderComponent={
             <View style={styles.mapSection}>
               {!mapFailed && mapAgents.length > 0 ? (
-                <MapViewSafe
-                  region={initialRegion}
-                  agents={mapAgents}
-                  selectedId={selectedId}
-                  onSelect={confirmAssign}
-                  onFail={() => setMapFailed(true)}
-                />
+                <MapErrorBoundary onError={() => setMapFailed(true)}>
+                  <MapViewInner
+                    region={initialRegion}
+                    agents={mapAgents}
+                    selectedId={selectedId}
+                    onSelect={confirmAssign}
+                  />
+                </MapErrorBoundary>
               ) : (
                 <View style={styles.mapFallback}>
                   <Ionicons name="map-outline" size={28} color={colors.grayLight} />
@@ -245,43 +270,61 @@ export default function DriverAgentsScreen() {
   );
 }
 
-// MapView を独立コンポーネントに切り出し、描画系の同期例外で親リストが
-// 巻き込まれないようにする。ネイティブモジュール未対応などの例外時は onFail を呼び、
-// 親はリスト専用レイアウトへ切り替える（地図はあくまで補助）。
-function MapViewSafe({
+// MapView のマウント/レンダリング失敗（例: Expo Go で地図ネイティブモジュールが
+// 未登録、AIRMap 未対応など）を React の Error Boundary で捕捉し、親へ通知する。
+// try/catch では JSX 生成時の同期例外しか捕まえられず、子のレンダー/コミット段階の
+// 例外は握れないため、クラスコンポーネントの getDerivedStateFromError / componentDidCatch を使う。
+// 注意: JS の Error Boundary はネイティブ層のハードクラッシュまでは捕捉できない。
+//      その場合に備え、地図はあくまで補助でリスト割り当てが常に機能する構成にしている。
+class MapErrorBoundary extends Component<
+  { onError: () => void; children: ReactNode },
+  { hasError: boolean }
+> {
+  state = { hasError: false };
+
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+
+  // render フェーズではなく lifecycle で親へ通知（render 中の setState を避ける）。
+  componentDidCatch() {
+    this.props.onError();
+  }
+
+  render() {
+    if (this.state.hasError) return null;
+    return this.props.children;
+  }
+}
+
+// 地図本体。例外隔離は上位の MapErrorBoundary が担う。
+function MapViewInner({
   region,
   agents,
   selectedId,
   onSelect,
-  onFail,
 }: {
   region: { latitude: number; longitude: number; latitudeDelta: number; longitudeDelta: number };
   agents: AgentLocation[];
   selectedId: string | null;
   onSelect: (a: AgentLocation) => void;
-  onFail: () => void;
 }) {
-  try {
-    return (
-      <View style={styles.mapWrap}>
-        <MapView style={styles.map} initialRegion={region}>
-          {agents.map((a) => (
-            <Marker
-              key={a.user_id}
-              coordinate={{ latitude: a.latitude, longitude: a.longitude }}
-              title={a.full_name}
-              description={a.address}
-              pinColor={a.user_id === selectedId ? '#1A7A4C' : undefined}
-              onPress={() => onSelect(a)}
-            />
-          ))}
-        </MapView>
-      </View>
-    );
-  } catch {
-    onFail();
-    return null;
-  }
+  return (
+    <View style={styles.mapWrap}>
+      <MapView style={styles.map} initialRegion={region}>
+        {agents.map((a) => (
+          <Marker
+            key={a.user_id}
+            coordinate={{ latitude: a.latitude, longitude: a.longitude }}
+            title={a.full_name}
+            description={a.address}
+            pinColor={a.user_id === selectedId ? '#1A7A4C' : undefined}
+            onPress={() => onSelect(a)}
+          />
+        ))}
+      </MapView>
+    </View>
+  );
 }
 
 const styles = StyleSheet.create({
