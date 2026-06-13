@@ -1,6 +1,10 @@
 import { supabase } from '../lib/supabase'
 import type { Role } from '../lib/database.types'
 
+// エラーメッセージ抽出は lib/error.ts に統合済み。
+// 既存の呼び出し元が `features/auth` から import できるよう再エクスポートで互換維持する。
+export { getErrorMessage } from '../lib/error'
+
 // Role は database.types.ts を唯一の正とする（A4）。UserRole はその別名。
 export type UserRole = Role
 
@@ -26,38 +30,6 @@ export async function signUpRecipient(params: {
   if (!data.user) throw new Error('Failed to create user')
 
   return data.user
-}
-
-export function getErrorMessage(error: unknown) {
-  if (error instanceof Error) return error.message
-
-  if (error && typeof error === 'object') {
-    const maybeError = error as {
-      message?: unknown
-      error_description?: unknown
-      details?: unknown
-      hint?: unknown
-      code?: unknown
-    }
-
-    const parts = [
-      maybeError.message,
-      maybeError.error_description,
-      maybeError.details,
-      maybeError.hint,
-      maybeError.code ? `code: ${String(maybeError.code)}` : undefined,
-    ].filter(Boolean)
-
-    if (parts.length > 0) return parts.map(String).join('\n')
-
-    try {
-      return JSON.stringify(error, null, 2)
-    } catch {
-      return String(error)
-    }
-  }
-
-  return String(error)
 }
 
 export async function signIn(email: string, password: string) {
