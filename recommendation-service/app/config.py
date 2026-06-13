@@ -26,6 +26,11 @@ DISTANCE_MAX_M = 2000.0
 EXPERIENCE_MAX_DELIVERIES = 20.0
 # level_score を 0-1 に正規化する際のレベル幅 (level 1..5 → 0..1 なので 4.0)。
 LEVEL_SCORE_RANGE = 4.0
+# rating_score を 0-1 に正規化する際の avg_rating の下限/上限 (1..5 → 0..1)。
+RATING_MIN = 1.0
+RATING_MAX = 5.0
+# avg_rating が None/未取得のときに使う中立値 (RPC未更新でも壊れないため)。
+RATING_NEUTRAL_SCORE = 0.5
 
 # 1 日の総分数 (24h * 60)。時間ウィンドウ計算で全日扱いの境界に使う。
 MINUTES_PER_DAY = 1440
@@ -61,6 +66,11 @@ class Settings:
     default_top_k: int = 5
     default_capacity: int = 3
     timezone: str = "Asia/Tokyo"
+    rate_limit_per_min: int = 60
+    rate_limit_burst: int = 10
+    cache_ttl_seconds: int = 30
+    # 信頼できる前段プロキシ配下でのみ X-Forwarded-For を採用（既定はソケットIP＝詐称不可）。
+    trust_forwarded_for: bool = False
 
 
 def _env_bool(name: str, default: bool) -> bool:
@@ -91,4 +101,8 @@ def get_settings() -> Settings:
         default_top_k=int(os.getenv("DEFAULT_TOP_K", "5")),
         default_capacity=int(os.getenv("DEFAULT_CAPACITY", "3")),
         timezone=os.getenv("APP_TIMEZONE", "Asia/Tokyo"),
+        rate_limit_per_min=int(os.getenv("RATE_LIMIT_PER_MIN", "60")),
+        rate_limit_burst=int(os.getenv("RATE_LIMIT_BURST", "10")),
+        cache_ttl_seconds=int(os.getenv("CACHE_TTL_SECONDS", "30")),
+        trust_forwarded_for=_env_bool("TRUST_FORWARDED_FOR", False),
     )

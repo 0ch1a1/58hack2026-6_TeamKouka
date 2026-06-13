@@ -2,11 +2,21 @@ from __future__ import annotations
 
 import hmac
 
-from fastapi import Depends, FastAPI, Header, HTTPException
+from fastapi import Depends, FastAPI, Header, HTTPException, Request, Response
+from fastapi.responses import JSONResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
+from app.cache import TTLCache
 from app.config import get_settings
+from app.metrics import (
+    increment_cache_hits,
+    increment_cache_misses,
+    increment_rate_limited,
+    increment_requests,
+    render_prometheus,
+)
 from app.model import RecommendationModel
+from app.ratelimit import TokenBucketRateLimiter
 from app.recommendation_service import (
     CandidateFetchError,
     LogPersistError,
@@ -26,10 +36,77 @@ from app.supabase_client import SupabaseGateway, verify_user_token
 settings = get_settings()
 model = RecommendationModel(settings.model_path)
 app = FastAPI(title="ShareKeep Recommendation Service", version="0.1.0")
+rate_limiter = TokenBucketRateLimiter(
+    rate_per_minute=settings.rate_limit_per_min,
+    burst=settings.rate_limit_burst,
+)
+recommendation_cache = TTLCache(ttl_seconds=settings.cache_ttl_seconds)
 
 # クライアントは Supabase ログインセッションの access_token を Bearer で送る。
 # auto_error=False にし、require_auth に応じて自前で 401 を出し分ける。
 _bearer = HTTPBearer(auto_error=False)
+
+
+def _client_ip(request: Request) -> str:
+    # X-Forwarded-For はクライアントが詐称可能。信頼できる前段プロキシがある場合のみ
+    # 採用する（TRUST_FORWARDED_FOR=true）。既定はソケットのピアIP＝詐称不可。
+    if settings.trust_forwarded_for:
+        forwarded_for = request.headers.get("x-forwarded-for")
+        if forwarded_for:
+            first_ip = forwarded_for.split(",", 1)[0].strip()
+            if first_ip:
+                return first_ip
+    return request.client.host if request.client else "unknown"
+
+
+def _recommend_cache_key(
+    request: RecommendRequest, recipient_id: str | None
+) -> str | None:
+    # 起点（座標 or recipient）を決定。どちらも無ければキャッシュ不可。
+    if request.latitude is not None and request.longitude is not None:
+        origin = f"{round(request.latitude, 3)}:{round(request.longitude, 3)}"
+    elif request.latitude is None and request.longitude is None and recipient_id:
+        origin = f"rid:{recipient_id}"
+    else:
+        return None
+
+    # parcel_id をキーに含める：別 parcel は必ず MISS にして recommendation_logs の
+    # 挿入をスキップさせない（/recommend→log→/feedback の学習経路を壊さない）。
+    # 同一 parcel の再表示だけが HIT する（ログは初回で挿入済み＝二重挿入も防ぐ）。
+    parcel = str(request.parcel_id) if request.parcel_id else "-"
+    # target_at はランキング（time_score/day_match 等）に効くのでキーに含める。
+    # 未指定同士は now 基準で共有（短 TTL 内の微差は許容＝キャッシュの趣旨）。
+    target_at = request.target_at.isoformat() if request.target_at else "now"
+    return f"{parcel}:{origin}:{request.radius_m}:{request.top_k}:{target_at}"
+
+
+@app.middleware("http")
+async def apply_rate_limit(request: Request, call_next):
+    """重い経路だけを認証・DB アクセスの前で保護する。"""
+    if request.url.path not in {"/recommend", "/feedback"}:
+        return await call_next(request)
+
+    if request.url.path == "/recommend":
+        increment_requests()
+
+    key = _client_ip(request)
+    allowed, retry_after = rate_limiter.consume(key)
+    if not allowed:
+        increment_rate_limited()
+        return JSONResponse(
+            status_code=429,
+            content={"detail": "Rate limit exceeded"},
+            headers={
+                "Retry-After": str(retry_after),
+                "X-RateLimit-Limit": str(settings.rate_limit_per_min),
+                "X-RateLimit-Remaining": "0",
+            },
+        )
+
+    response = await call_next(request)
+    response.headers["X-RateLimit-Limit"] = str(settings.rate_limit_per_min)
+    response.headers["X-RateLimit-Remaining"] = str(rate_limiter.remaining(key))
+    return response
 
 
 def get_authenticated_user_id(
@@ -122,23 +199,46 @@ def health() -> HealthResponse:
     )
 
 
+@app.get("/metrics")
+def metrics() -> Response:
+    return Response(
+        content=render_prometheus(),
+        headers={"Content-Type": "text/plain; version=0.0.4"},
+    )
+
+
 @app.post("/recommend", response_model=RecommendResponse)
 def recommend(
     request: RecommendRequest,
+    response: Response,
     user_id: str | None = Depends(get_authenticated_user_id),
 ) -> RecommendResponse:
-    gateway = _gateway()
     # 認証済みなら recipient_id はトークン由来を正とする（クライアント詐称を防ぐ）。
     recipient_id = user_id or (str(request.recipient_id) if request.recipient_id else None)
     parcel_id = str(request.parcel_id) if request.parcel_id else None
-    _assert_parcel_owner(gateway, parcel_id, user_id)
+
+    gateway: SupabaseGateway | None = None
+    if parcel_id and user_id:
+        gateway = _gateway()
+        _assert_parcel_owner(gateway, parcel_id, user_id)
+
+    cache_key = _recommend_cache_key(request, recipient_id)
+    if cache_key is not None:
+        cached = recommendation_cache.get(cache_key)
+        if cached is not None:
+            increment_cache_hits()
+            response.headers["X-Cache"] = "HIT"
+            return cached
+        increment_cache_misses()
+
+    gateway = gateway or _gateway()
     latitude, longitude = _resolve_origin(gateway, request, recipient_id)
 
     # 取得→特徴化→予測→ランキング→ログ→整形の中核は RecommendationService に委譲。
     # ログに焼く recipient_id / parcel_id は上で解決した authoritative な値を渡す。
     service = RecommendationService(gateway, model, settings)
     try:
-        return service.recommend(
+        result = service.recommend(
             request,
             latitude=latitude,
             longitude=longitude,
@@ -148,6 +248,10 @@ def recommend(
     except (CandidateFetchError, LogPersistError) as exc:
         # 下流 (Supabase) 起因の障害は 502 Bad Gateway。
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+    if cache_key is not None:
+        recommendation_cache.set(cache_key, result)
+    response.headers["X-Cache"] = "MISS"
+    return result
 
 
 @app.post("/feedback", response_model=FeedbackResponse)
@@ -183,4 +287,3 @@ def retrain(_: None = Depends(require_admin)) -> RetrainResponse:
         test_auc=result.test_auc,
         rows=result.rows,
     )
-

@@ -9,6 +9,9 @@ from app.config import (
     EXPERIENCE_MAX_DELIVERIES,
     LEVEL_SCORE_RANGE,
     MINUTES_PER_DAY,
+    RATING_MAX,
+    RATING_MIN,
+    RATING_NEUTRAL_SCORE,
     TIME_SCORE_CENTER_DECAY,
     TIME_SCORE_OUT_OF_WINDOW,
     TIME_SCORE_WINDOW_FLOOR,
@@ -25,6 +28,7 @@ __all__ = [
     "DAY_ALIASES",
     "clamp",
     "calculate_time_score",
+    "calculate_rating_score",
     "normalize_weekdays",
     "calculate_day_match",
     "build_features",
@@ -40,6 +44,7 @@ FEATURE_NAMES = [
     "capacity_score",
     "is_weekend",
     "is_evening",
+    "rating_score",
 ]
 
 DAY_ALIASES = {
@@ -199,6 +204,17 @@ def calculate_day_match(available_days: Any, now: datetime) -> float:
     return 1.0 if now.weekday() in weekdays else 0.0
 
 
+def calculate_rating_score(avg_rating: Any) -> float:
+    """avg_rating(1..5) を 0..1 に正規化。None/未取得は中立値を返す。"""
+    if avg_rating is None:
+        return RATING_NEUTRAL_SCORE
+    try:
+        value = float(avg_rating)
+    except (TypeError, ValueError):
+        return RATING_NEUTRAL_SCORE
+    return clamp((value - RATING_MIN) / (RATING_MAX - RATING_MIN))
+
+
 def build_features(
     raw: dict[str, Any] | Any,
     now: datetime | str | None,
@@ -226,6 +242,7 @@ def build_features(
         "capacity_score": clamp(1.0 - active_load / safe_capacity),
         "is_weekend": 1.0 if local_now.weekday() >= WEEKEND_WEEKDAY_THRESHOLD else 0.0,
         "is_evening": 1.0 if now_minute >= EVENING_START_MINUTE else 0.0,
+        "rating_score": calculate_rating_score(_get(raw, "avg_rating")),
     }
     return {name: float(features[name]) for name in FEATURE_NAMES}
 
