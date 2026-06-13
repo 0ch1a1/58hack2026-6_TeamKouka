@@ -6,6 +6,7 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import { colors, spacing, radius } from '../../../lib/theme';
 import { ScreenHeader, Card, PrimaryButton } from '../../../components/ui';
 import { verifyAgentQr, fetchParcel } from '../../../features/parcels';
+import { logError } from '../../../lib/logger';
 
 // 代理人QR読み取り（配達員向け）。
 // 代理人が提示する agent QR をカメラで読み、verifyAgentQr で荷物を
@@ -94,6 +95,7 @@ export default function DriverScanScreen() {
         // verify-agent-qr Edge Function がサーバ側で処理する（冪等）。
         await verifyAgentQr(data);
       } catch (error) {
+        logError('driver/scan:verifyAgentQr', error);
         setErrorMsg(ERROR_MESSAGE[classifyError(error)]);
         setPhase('error');
         return;
@@ -105,7 +107,8 @@ export default function DriverScanScreen() {
         let parcel = null;
         try {
           parcel = await fetchParcel(parcelId);
-        } catch {
+        } catch (error) {
+          logError('driver/scan:fetchParcel', error);
           // 整合確認の失敗（RLS で読めない等）は致命的ではない。verify は成功しているため
           // 完了扱いにし、確認は不明（null）のままにする。
           setStatusConfirmed(null);

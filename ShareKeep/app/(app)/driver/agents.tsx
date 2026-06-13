@@ -19,6 +19,7 @@ import { colors, cardShadow, radius, spacing } from '../../../lib/theme';
 import { FALLBACK_LOCATION } from '../../../lib/constants';
 import { ScreenHeader, Card, InfoRow, EmptyState } from '../../../components/ui';
 import { getAgentLocations, assignAgentToParcel } from '../../../features/parcels';
+import { logError } from '../../../lib/logger';
 
 // getAgentLocations() の戻り要素の型（features/parcels の戻り値を参照）。
 type AgentLocation = Awaited<ReturnType<typeof getAgentLocations>>[number];
@@ -106,7 +107,8 @@ export default function DriverAgentsScreen() {
       setLoading(true);
       const data = await getAgentLocations();
       setAgents(data ?? []);
-    } catch {
+    } catch (error) {
+      logError('driver/agents:loadAgents', error);
       Alert.alert('エラー', '代理人情報の取得に失敗しました。');
       setAgents([]);
     } finally {
@@ -157,7 +159,8 @@ export default function DriverAgentsScreen() {
         Alert.alert('割り当て完了', `${agent.full_name} さんに割り当てました。`, [
           { text: 'OK', onPress: () => router.back() },
         ]);
-      } catch {
+      } catch (error) {
+        logError('driver/agents:doAssign', error);
         Alert.alert('エラー', '代理人の割り当てに失敗しました。');
       } finally {
         setAssigningId(null);
