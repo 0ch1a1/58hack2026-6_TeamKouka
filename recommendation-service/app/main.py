@@ -3,6 +3,7 @@ from __future__ import annotations
 import hmac
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request, Response
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
@@ -36,6 +37,19 @@ from app.supabase_client import SupabaseGateway, verify_user_token
 settings = get_settings()
 model = RecommendationModel(settings.model_path)
 app = FastAPI(title="ShareKeep Recommendation Service", version="0.1.0")
+
+# CORS allowlist。RECOMMENDATION_CORS_ORIGINS（カンマ区切り）で明示したオリジンのみ許可する。
+# allow_origins=["*"] と credentials の併用はブラウザ仕様上不可なので、明示オリジンのときだけ
+# credentials を許可する（既定の空リストではミドルウェアを付けず、CORS を一切開けない）。
+if settings.cors_allow_origins:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=list(settings.cors_allow_origins),
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
 rate_limiter = TokenBucketRateLimiter(
     rate_per_minute=settings.rate_limit_per_min,
     burst=settings.rate_limit_burst,

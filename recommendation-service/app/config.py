@@ -62,6 +62,9 @@ class Settings:
     supabase_anon_key: str | None = None   # クライアントの JWT 検証に使う公開鍵
     admin_api_key: str | None = None        # /retrain を保護する管理者キー
     require_auth: bool = True               # /recommend・/feedback に JWT を必須化
+    # CORS 許可オリジン（allowlist）。空なら CORS ミドルウェアを付与しない。
+    # ワイルドカード "*" は credentials と併用不可のため、明示オリジンのみを受け付ける。
+    cors_allow_origins: tuple[str, ...] = ()
     default_radius_m: int = 2000
     default_top_k: int = 5
     default_capacity: int = 3
@@ -81,6 +84,14 @@ def _env_bool(name: str, default: bool) -> bool:
     return raw.strip().lower() not in {"0", "false", "no", "off"}
 
 
+def _env_csv(name: str) -> tuple[str, ...]:
+    # カンマ区切りの環境変数を空要素を除いたタプルに正規化する。
+    raw = os.getenv(name)
+    if raw is None:
+        return ()
+    return tuple(item.strip() for item in raw.split(",") if item.strip())
+
+
 def get_settings() -> Settings:
     model_path = Path(
         os.getenv("MODEL_PATH", str(SERVICE_ROOT / "models" / "model.joblib"))
@@ -96,6 +107,7 @@ def get_settings() -> Settings:
         or os.getenv("SUPABASE_PUBLISHABLE_KEY"),
         admin_api_key=os.getenv("ADMIN_API_KEY"),
         require_auth=_env_bool("RECOMMENDATION_REQUIRE_AUTH", True),
+        cors_allow_origins=_env_csv("RECOMMENDATION_CORS_ORIGINS"),
         model_path=model_path,
         default_radius_m=int(os.getenv("DEFAULT_RADIUS_M", "2000")),
         default_top_k=int(os.getenv("DEFAULT_TOP_K", "5")),
