@@ -4,6 +4,7 @@ import re
 from functools import lru_cache
 from typing import Any
 
+import httpx
 from supabase import Client, create_client
 
 from app.config import Settings
@@ -18,7 +19,10 @@ def _auth_client(url: str, key: str) -> Client:
 def verify_user_token(settings: Settings, token: str) -> str:
     """Supabase にトークンの有効性を問い合わせ、ユーザ ID を返す。
 
-    無効・期限切れは PermissionError、設定不足は ValueError を送出する。
+    - 無効・期限切れトークン: PermissionError（呼び出し側で 401）
+    - 設定不足: ValueError（500）
+    - Supabase 到達不能・タイムアウト等の一時障害: ConnectionError（503）
+      ＝認証失敗とサービス障害を取り違えない（正当なユーザを誤って弾かない）。
     """
     key = settings.supabase_anon_key or settings.supabase_service_role_key
     if not settings.supabase_url or not key:
@@ -28,7 +32,9 @@ def verify_user_token(settings: Settings, token: str) -> str:
     client = _auth_client(settings.supabase_url, key)
     try:
         response = client.auth.get_user(token)
-    except Exception as exc:  # supabase-py はトークン不正で例外を投げる
+    except httpx.HTTPError as exc:  # ネットワーク/到達不能/タイムアウト = 一時障害
+        raise ConnectionError("Auth service unreachable") from exc
+    except Exception as exc:  # それ以外（トークン不正など）は認証失敗扱い
         raise PermissionError("Invalid or expired token") from exc
 
     user = getattr(response, "user", None)
@@ -96,8 +102,9 @@ class SupabaseGateway:
             "that returns ST_Y(location::geometry) as lat and ST_X(location::geometry) as lng."
         )
 
-    def get_parcel_recipient_id(self, parcel_id: str) -> str | None:
-        # parcel の所有者（受取人）を返す。認証ユーザの所有チェックに使う。
+    def get_parcel_owner(self, parcel_id: str) -> tuple[bool, str | None]:
+        # parcel の所有者（受取人）を (見つかったか, recipient_id) で返す。
+        # 「不在」と「recipient_id が NULL」を呼び出し側で区別できるようにする（fail closed のため）。
         response = (
             self.client.table("parcels")
             .select("recipient_id")
@@ -107,9 +114,9 @@ class SupabaseGateway:
         )
         rows = response.data or []
         if not rows:
-            return None
+            return False, None
         recipient_id = rows[0].get("recipient_id")
-        return str(recipient_id) if recipient_id is not None else None
+        return True, (str(recipient_id) if recipient_id is not None else None)
 
     def insert_recommendation_logs(self, rows: list[dict[str, Any]]) -> None:
         if not rows:

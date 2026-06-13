@@ -32,9 +32,10 @@ class Settings:
 
 def _env_bool(name: str, default: bool) -> bool:
     raw = os.getenv(name)
-    if raw is None:
+    # 未設定・空文字はどちらも default（空指定で認証が不意に切れる事故を防ぐ）。
+    if raw is None or raw.strip() == "":
         return default
-    return raw.strip().lower() not in {"0", "false", "no", "off", ""}
+    return raw.strip().lower() not in {"0", "false", "no", "off"}
 
 
 def get_settings() -> Settings:

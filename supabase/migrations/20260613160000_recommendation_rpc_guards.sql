@@ -1,12 +1,14 @@
 -- =============================================================================
--- 推薦RPCのセキュリティ強化（レビュー指摘 high/critical への対応）
+-- 推薦RPCのセキュリティ強化（レビュー指摘 critical/high への対応）
 --
 -- 前提: 20260613140000_recommendation.sql が適用済みであること。
 --
 -- 方針:
 --   * security definer 関数（任意IDを受ける）に所有者チェックを追加する。
---     - 認証ユーザ（auth.uid() が非NULL）は「自分の」リソースのみ操作可。
---     - service_role（auth.uid() が NULL）は信頼サーバとして従来どおり全件操作可。
+--     - 信頼サーバ（service_role）のみバイパス。判定は JWT クレームの role で行う
+--       （`auth.uid() is null` だけだと未ログインの anon も null なので不可）。
+--     - それ以外（authenticated）は「自分の」リソースのみ操作可。anon は所有者になれず拒否。
+--   * 多層防御として execute 権限も public から剥がし、authenticated/service_role 限定にする。
 --   * 代理人候補（PII含む）を返す関数はクライアント直叩きを禁止し service_role 限定にする。
 -- =============================================================================
 
@@ -26,7 +28,9 @@ security definer
 set search_path = public
 as $$
 begin
-  if auth.uid() is not null and auth.uid() <> p_user_id then
+  -- service_role（信頼サーバ）以外は本人のみ。anon は auth.uid() が null で必ず弾かれる。
+  if coalesce(nullif(current_setting('request.jwt.claims', true), '')::jsonb ->> 'role', '') <> 'service_role'
+     and (auth.uid() is null or auth.uid() <> p_user_id) then
     raise exception 'not authorized to update another user''s profile';
   end if;
 
@@ -57,10 +61,11 @@ security definer
 set search_path = public
 as $$
 begin
-  if auth.uid() is not null and not exists (
-    select 1 from public.parcels p
-    where p.id = p_parcel_id and p.recipient_id = auth.uid()
-  ) then
+  if coalesce(nullif(current_setting('request.jwt.claims', true), '')::jsonb ->> 'role', '') <> 'service_role'
+     and not exists (
+       select 1 from public.parcels p
+       where p.id = p_parcel_id and p.recipient_id = auth.uid()
+     ) then
     raise exception 'not authorized for this parcel';
   end if;
 
@@ -83,10 +88,11 @@ security definer
 set search_path = public
 as $$
 begin
-  if auth.uid() is not null and not exists (
-    select 1 from public.parcels p
-    where p.id = p_parcel_id and p.recipient_id = auth.uid()
-  ) then
+  if coalesce(nullif(current_setting('request.jwt.claims', true), '')::jsonb ->> 'role', '') <> 'service_role'
+     and not exists (
+       select 1 from public.parcels p
+       where p.id = p_parcel_id and p.recipient_id = auth.uid()
+     ) then
     raise exception 'not authorized for this parcel';
   end if;
 
@@ -98,7 +104,20 @@ end;
 $$;
 
 -- ---------------------------------------------------------------------------
--- 4. 候補取得は service_role 限定に（代理人の氏名・住所などPIIを返すため）。
+-- 4. execute 権限の多層防御：anon を排除し authenticated/service_role 限定に。
+--    （関数内ガードに加え、anon は実行自体できないようにする）
+-- ---------------------------------------------------------------------------
+revoke execute on function public.upsert_recipient_profile(uuid, text, double precision, double precision, text) from public;
+grant  execute on function public.upsert_recipient_profile(uuid, text, double precision, double precision, text) to authenticated, service_role;
+
+revoke execute on function public.mark_recommendation_chosen(uuid, uuid) from public;
+grant  execute on function public.mark_recommendation_chosen(uuid, uuid) to authenticated, service_role;
+
+revoke execute on function public.record_recommendation_outcome(uuid, text) from public;
+grant  execute on function public.record_recommendation_outcome(uuid, text) to authenticated, service_role;
+
+-- ---------------------------------------------------------------------------
+-- 5. 候補取得は service_role 限定に（代理人の氏名・住所などPIIを返すため）。
 --    クライアントは Python サービス経由でのみ取得する。
 -- ---------------------------------------------------------------------------
 revoke execute on function public.get_recommendation_candidates(

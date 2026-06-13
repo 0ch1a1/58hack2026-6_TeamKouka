@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hmac
 from datetime import datetime, timezone
 from typing import Any
 
@@ -48,6 +49,9 @@ def get_authenticated_user_id(
         return verify_user_token(settings, credentials.credentials)
     except PermissionError as exc:
         raise HTTPException(status_code=401, detail=str(exc)) from exc
+    except ConnectionError as exc:
+        # Supabase 一時障害は 503（認証失敗 401 と区別する）
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
@@ -58,7 +62,8 @@ def require_admin(x_admin_key: str | None = Header(default=None, alias="X-Admin-
         raise HTTPException(
             status_code=503, detail="Retraining is disabled (ADMIN_API_KEY not configured)"
         )
-    if x_admin_key != settings.admin_api_key:
+    # 定数時間比較でタイミング攻撃を避ける
+    if not hmac.compare_digest(x_admin_key or "", settings.admin_api_key):
         raise HTTPException(status_code=403, detail="Invalid admin key")
 
 
@@ -73,10 +78,13 @@ def _assert_parcel_owner(
     gateway: SupabaseGateway, parcel_id: str | None, user_id: str | None
 ) -> None:
     # 認証ユーザが parcel の所有者でなければ拒否（service_role 経由でも詐称を防ぐ）。
+    # 所有者不明（parcel 不在 / recipient_id NULL）は fail closed で弾く。
     if user_id is None or parcel_id is None:
         return
-    owner = gateway.get_parcel_recipient_id(parcel_id)
-    if owner is not None and owner != user_id:
+    found, owner = gateway.get_parcel_owner(parcel_id)
+    if not found:
+        raise HTTPException(status_code=404, detail="parcel not found")
+    if owner is None or owner != user_id:
         raise HTTPException(
             status_code=403, detail="parcel does not belong to the authenticated user"
         )
