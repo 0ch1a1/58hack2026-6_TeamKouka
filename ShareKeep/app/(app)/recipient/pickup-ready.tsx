@@ -24,6 +24,19 @@ type AgentInfo = {
   floor: string;
 };
 
+// getDeliveryMatch（select('*, profiles!agent_id(full_name, phone)')）の結果のうち
+// この画面で参照する最小フィールドだけを表す型。profiles は to-one 埋め込みで実行時は単一オブジェクト。
+type DeliveryMatchRow = {
+  agent_id: string | null;
+  profiles: { full_name: string | null } | null;
+};
+
+// agent_profiles.select('address, address_detail') の最小型。
+type AgentProfileRow = {
+  address: string | null;
+  address_detail: string | null;
+};
+
 export default function PickupReadyScreen() {
   const { parcelId } = useLocalSearchParams<{ parcelId: string }>();
   const [loading, setLoading] = useState(true);
@@ -73,8 +86,8 @@ export default function PickupReadyScreen() {
         return;
       }
 
-      const m = match as any;
-      const agentId = m.agent_id as string | null;
+      const m = match as DeliveryMatchRow;
+      const agentId = m.agent_id;
       const agentName = m.profiles?.full_name ?? '不明';
 
       // agent_profiles から住所を取得（user_id = agent_id）。
@@ -89,8 +102,9 @@ export default function PickupReadyScreen() {
           .select('address, address_detail')
           .eq('user_id', agentId)
           .maybeSingle();
-        address = (agentProfile as any)?.address ?? '';
-        floor = (agentProfile as any)?.address_detail ?? '';
+        const profile = agentProfile as AgentProfileRow | null;
+        address = profile?.address ?? '';
+        floor = profile?.address_detail ?? '';
       }
 
       setAgent({ name: agentName, address, floor });
