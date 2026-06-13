@@ -28,6 +28,17 @@ def _sample_days(rng: np.random.Generator, now_weekday: int) -> list[str]:
     return sorted(days, key=DAY_NAMES.index)
 
 
+def _sample_avg_rating(rng: np.random.Generator) -> float | None:
+    # 約25%は評価なし(None)。残りは高め偏重(3.0..5.0)で、たまに低評価。
+    if rng.random() < 0.25:
+        return None
+    if rng.random() < 0.12:
+        # たまに低評価 (1.0..3.0)。
+        return float(np.clip(rng.uniform(1.0, 3.0), 1.0, 5.0))
+    # 高め偏重: 4.3 中心の正規分布を 3.0..5.0 にクランプ。
+    return float(np.clip(rng.normal(4.3, 0.6), 3.0, 5.0))
+
+
 def _sample_window(rng: np.random.Generator, now_minute: int) -> tuple[str | None, str | None]:
     if rng.random() < 0.08:
         return None, None
@@ -61,19 +72,29 @@ def generate(n: int, seed: int) -> pd.DataFrame:
             "completed_deliveries": int(np.clip(rng.poisson(8), 0, 60)),
             "points": int(np.clip(rng.normal(600, 350), 0, 2500)),
             "active_load": int(rng.choice([0, 1, 2, 3, 4], p=[0.38, 0.30, 0.20, 0.09, 0.03])),
+            "avg_rating": _sample_avg_rating(rng),
         }
         features = build_features(raw, now, capacity=3)
+        rating = features["rating_score"]
+        dist = features["distance_score"]
+        # 低評価(<0.4)は強い閾値ペナルティ＝GBMが拾える非線形効果。
+        rating_penalty = -0.22 if rating < 0.4 else 0.0
+        # 交互作用: 「高評価 かつ 近距離」のときだけ強いボーナス（XOR的・線形では表せない）。
+        synergy = 0.20 if (rating >= 0.6 and dist >= 0.6) else 0.0
         utility = (
-            0.34 * features["distance_score"]
-            + 0.25 * features["time_score"]
-            + 0.11 * features["day_match"]
-            + 0.14 * features["experience"]
-            + 0.08 * features["level_score"]
-            + 0.10 * features["capacity_score"]
+            0.26 * dist
+            + 0.22 * features["time_score"]
+            + 0.10 * features["day_match"]
+            + 0.11 * features["experience"]
+            + 0.06 * features["level_score"]
+            + 0.08 * features["capacity_score"]
+            + 0.10 * rating
             + 0.02 * features["is_weekend"] * features["day_match"]
             - 0.03 * features["is_evening"] * (1.0 - features["time_score"])
+            + synergy
+            + rating_penalty
         )
-        probability = sigmoid((utility - 0.56) * 6.5 + float(rng.normal(0, 0.65)))
+        probability = sigmoid((utility - 0.56) * 6.5 + float(rng.normal(0, 0.40)))
         label = int(rng.random() < probability)
 
         rows.append(
@@ -84,6 +105,7 @@ def generate(n: int, seed: int) -> pd.DataFrame:
                 "level": raw["level"],
                 "completed_deliveries": raw["completed_deliveries"],
                 "active_load": raw["active_load"],
+                "avg_rating": raw["avg_rating"],
             }
         )
 
@@ -93,6 +115,7 @@ def generate(n: int, seed: int) -> pd.DataFrame:
         "level",
         "completed_deliveries",
         "active_load",
+        "avg_rating",
     ]
     return pd.DataFrame(rows, columns=columns)
 

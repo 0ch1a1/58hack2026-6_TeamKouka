@@ -10,10 +10,13 @@ from app.config import (
     TIME_SCORE_WINDOW_FLOOR,
 )
 from app.features import (
+    FEATURE_NAMES,
     _minutes_in_window,
     _parse_time,
     _position_in_window,
+    build_features,
     calculate_day_match,
+    calculate_rating_score,
     calculate_time_score,
     normalize_weekdays,
 )
@@ -150,3 +153,32 @@ def test_day_match_hit_and_miss():
     monday = _now(12, day=15)
     assert calculate_day_match("Mon", monday) == 1.0
     assert calculate_day_match("Tue", monday) == 0.0
+
+
+# --- rating_score -----------------------------------------------------------
+
+
+def test_rating_score_normalizes_1_to_5_into_0_to_1():
+    assert calculate_rating_score(1.0) == pytest.approx(0.0)
+    assert calculate_rating_score(3.0) == pytest.approx(0.5)
+    assert calculate_rating_score(5.0) == pytest.approx(1.0)
+
+
+def test_rating_score_clamps_out_of_range():
+    assert calculate_rating_score(0.0) == pytest.approx(0.0)
+    assert calculate_rating_score(6.0) == pytest.approx(1.0)
+
+
+def test_rating_score_none_or_invalid_is_neutral():
+    assert calculate_rating_score(None) == pytest.approx(0.5)
+    assert calculate_rating_score("bad") == pytest.approx(0.5)
+
+
+def test_rating_score_in_feature_names_and_build_features():
+    assert "rating_score" in FEATURE_NAMES
+    # avg_rating 未取得でも壊れず中立値 0.5。
+    features = build_features({"distance_meters": 100}, _now(12))
+    assert features["rating_score"] == pytest.approx(0.5)
+    # avg_rating=5 → 1.0。
+    features = build_features({"distance_meters": 100, "avg_rating": 5.0}, _now(12))
+    assert features["rating_score"] == pytest.approx(1.0)

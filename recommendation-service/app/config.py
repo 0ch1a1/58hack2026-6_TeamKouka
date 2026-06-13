@@ -26,6 +26,11 @@ DISTANCE_MAX_M = 2000.0
 EXPERIENCE_MAX_DELIVERIES = 20.0
 # level_score を 0-1 に正規化する際のレベル幅 (level 1..5 → 0..1 なので 4.0)。
 LEVEL_SCORE_RANGE = 4.0
+# rating_score を 0-1 に正規化する際の avg_rating の下限/上限 (1..5 → 0..1)。
+RATING_MIN = 1.0
+RATING_MAX = 5.0
+# avg_rating が None/未取得のときに使う中立値 (RPC未更新でも壊れないため)。
+RATING_NEUTRAL_SCORE = 0.5
 
 # 1 日の総分数 (24h * 60)。時間ウィンドウ計算で全日扱いの境界に使う。
 MINUTES_PER_DAY = 1440

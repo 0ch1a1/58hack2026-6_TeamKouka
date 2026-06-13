@@ -21,6 +21,7 @@ FALLBACK_WEIGHTS = {
     "capacity_score": 0.10,
     "is_weekend": 0.00,
     "is_evening": 0.00,
+    "rating_score": 0.12,
 }
 
 REASON_LABELS = {
@@ -32,6 +33,7 @@ REASON_LABELS = {
     "capacity_score": "現在の保管負荷が低い",
     "is_weekend": "週末の文脈に合っている",
     "is_evening": "夕方以降の文脈に合っている",
+    "rating_score": "受取人からの評価が高い",
 }
 
 
