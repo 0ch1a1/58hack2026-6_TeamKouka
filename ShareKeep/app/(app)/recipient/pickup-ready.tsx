@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -7,89 +7,148 @@ import {
   TouchableOpacity,
   Modal,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { router, useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams } from 'expo-router';
+import QRCode from 'react-native-qrcode-svg';
+import { supabase, getDeliveryMatch } from '../../../lib/supabase';
+import { colors, radius } from '../../../lib/theme';
+import { ScreenHeader, PrimaryButton, Card, InfoRow } from '../../../components/ui';
 
-const GREEN = '#1A7A4C';
-const BG = '#F0FAF4';
-
-// TODO: Supabase から取得
-const MOCK_AGENT = {
-  name: '田中 花子',
-  address: '東京都渋谷区代々木1-2-3',
-  floor: '203号室',
-  note: 'インターフォンを押してください',
+type AgentInfo = {
+  name: string;
+  postalCode: string;
+  address: string;
+  floor: string;
 };
 
 export default function PickupReadyScreen() {
-  const { packageName, trackingNumber } = useLocalSearchParams<{
-    packageName: string;
-    trackingNumber: string;
-  }>();
+  const { parcelId } = useLocalSearchParams<{ parcelId: string }>();
+  const [loading, setLoading] = useState(true);
+  const [agent, setAgent] = useState<AgentInfo | null>(null);
+  const [trackingNo, setTrackingNo] = useState<string>('—');
+  const [qrToken, setQrToken] = useState<string | null>(null);
   const [qrVisible, setQrVisible] = useState(false);
+
+  useEffect(() => {
+    if (!parcelId) { setLoading(false); return; }
+
+    const fetchData = async () => {
+      // 代理人(JOIN) / 追跡番号 / 引き渡しQRは parcelId だけで引けて互いに独立なので並列取得
+      const [
+        { data: match, error: matchError },
+        { data: parcel },
+        { data: token },
+      ] = await Promise.all([
+        // delivery_matches から代理人を取得（agent_id で profiles を JOIN）
+        getDeliveryMatch(parcelId),
+        // 追跡番号を parcels から取得
+        supabase
+          .from('parcels')
+          .select('tracking_no')
+          .eq('id', parcelId)
+          .maybeSingle(),
+        // 引き渡し確認QR（受取人提示用トークン）を取得
+        supabase
+          .from('qr_tokens')
+          .select('token')
+          .eq('parcel_id', parcelId)
+          .eq('qr_type', 'recipient')
+          .eq('used', false)
+          .gt('expires_at', new Date().toISOString())
+          .maybeSingle(),
+      ]);
+
+      setTrackingNo((parcel as any)?.tracking_no ?? '—');
+      setQrToken((token as any)?.token ?? parcelId);
+
+      if (matchError || !match) {
+        Alert.alert('エラー', '代理人情報の取得に失敗しました。');
+        setLoading(false);
+        return;
+      }
+
+      const m = match as any;
+      const agentId = m.agent_id as string | null;
+      const agentName = m.profiles?.full_name ?? '不明';
+
+      // agent_profiles から住所を取得（user_id = agent_id, '|' 区切り）
+      let postalCode = '';
+      let address = '';
+      let floor = '';
+      if (agentId) {
+        const { data: agentProfile } = await supabase
+          .from('agent_profiles')
+          .select('address')
+          .eq('user_id', agentId)
+          .maybeSingle();
+        const parts = ((agentProfile as any)?.address ?? '').split('|');
+        postalCode = parts[0] ?? '';
+        address = parts[1] ?? '';
+        floor = parts[2] ?? '';
+      }
+
+      setAgent({ name: agentName, postalCode, address, floor });
+      setLoading(false);
+    };
+
+    fetchData();
+  }, [parcelId]);
 
   const handleGoNow = () => {
     // TODO: Supabase で「向かっています」ステータスを更新
     Alert.alert('代理人に通知しました', '代理人に「今から向かいます」と伝えました。');
   };
 
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.safe}>
+        <View style={styles.center}>
+          <ActivityIndicator size="large" color={colors.green} />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.safe}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name="chevron-back" size={24} color={GREEN} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>荷物を受け取る</Text>
-        <View style={styles.headerRight} />
-      </View>
+      <ScreenHeader title="荷物を受け取る" />
 
       <View style={styles.body}>
         <View style={styles.statusBanner}>
-          <Ionicons name="home-outline" size={20} color={GREEN} />
+          <Ionicons name="home-outline" size={20} color={colors.green} />
           <Text style={styles.statusText}>代理人が荷物を預かっています</Text>
         </View>
 
-        <View style={styles.card}>
+        <Card>
           <Text style={styles.cardSectionTitle}>代理人の情報</Text>
           <View style={styles.agentRow}>
             <View style={styles.avatar}>
-              <Ionicons name="person" size={28} color={GREEN} />
+              <Ionicons name="person" size={28} color={colors.green} />
             </View>
             <View style={styles.agentInfo}>
-              <Text style={styles.agentName}>{MOCK_AGENT.name}</Text>
-              <Text style={styles.agentAddress}>{MOCK_AGENT.address}</Text>
-              <Text style={styles.agentAddress}>{MOCK_AGENT.floor}</Text>
+              <Text style={styles.agentName}>{agent?.name ?? '—'}</Text>
+              {agent?.postalCode ? (
+                <Text style={styles.agentAddress}>〒{agent.postalCode}</Text>
+              ) : null}
+              <Text style={styles.agentAddress}>{agent?.address || '—'}</Text>
+              {agent?.floor ? (
+                <Text style={styles.agentAddress}>{agent.floor}</Text>
+              ) : null}
             </View>
           </View>
-          {MOCK_AGENT.note ? (
-            <View style={styles.noteRow}>
-              <Ionicons name="information-circle-outline" size={14} color="#9CA3AF" />
-              <Text style={styles.noteText}>{MOCK_AGENT.note}</Text>
-            </View>
-          ) : null}
-        </View>
+        </Card>
 
-        <View style={styles.card}>
+        <Card>
           <Text style={styles.cardSectionTitle}>荷物の情報</Text>
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>荷物名</Text>
-            <Text style={styles.infoValue}>{packageName ?? '—'}</Text>
-          </View>
-          <View style={styles.divider} />
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>追跡番号</Text>
-            <Text style={styles.infoValue}>{trackingNumber ?? '—'}</Text>
-          </View>
-        </View>
+          <InfoRow label="追跡番号" value={trackingNo} />
+        </Card>
 
-        <TouchableOpacity style={styles.primaryButton} onPress={handleGoNow}>
-          <Ionicons name="walk-outline" size={20} color="#FFFFFF" />
-          <Text style={styles.primaryButtonText}>今から取りに行く</Text>
-        </TouchableOpacity>
+        <PrimaryButton label="今から取りに行く" icon="walk-outline" onPress={handleGoNow} />
 
         <TouchableOpacity style={styles.secondaryButton} onPress={() => setQrVisible(true)}>
-          <Ionicons name="qr-code-outline" size={20} color={GREEN} />
+          <Ionicons name="qr-code-outline" size={20} color={colors.green} />
           <Text style={styles.secondaryButtonText}>引き渡し確認QRを表示</Text>
         </TouchableOpacity>
       </View>
@@ -100,10 +159,8 @@ export default function PickupReadyScreen() {
             <Text style={styles.modalTitle}>引き渡し確認QR</Text>
             <Text style={styles.modalDesc}>代理人に提示してスキャンしてもらってください</Text>
 
-            {/* TODO: qr_tokens から取得したトークンでQRコードを生成 */}
-            <View style={styles.qrPlaceholder}>
-              <Ionicons name="qr-code" size={120} color="#111827" />
-              <Text style={styles.qrNote}>（実装後はQRコードが表示されます）</Text>
+            <View style={styles.qrWrap}>
+              {qrToken && <QRCode value={qrToken} size={200} />}
             </View>
 
             <TouchableOpacity style={styles.closeButton} onPress={() => setQrVisible(false)}>
@@ -119,29 +176,12 @@ export default function PickupReadyScreen() {
 const styles = StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: BG,
+    backgroundColor: colors.bg,
   },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 8,
-  },
-  backButton: {
-    width: 36,
-    height: 36,
-    justifyContent: 'center',
-  },
-  headerTitle: {
+  center: {
     flex: 1,
-    textAlign: 'center',
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#111827',
-  },
-  headerRight: {
-    width: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   body: {
     flex: 1,
@@ -153,7 +193,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: '#D1FAE5',
+    backgroundColor: colors.greenLight,
     borderRadius: 12,
     paddingHorizontal: 16,
     paddingVertical: 12,
@@ -161,23 +201,12 @@ const styles = StyleSheet.create({
   statusText: {
     fontSize: 14,
     fontWeight: '600',
-    color: GREEN,
-  },
-  card: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 16,
-    gap: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 2,
+    color: colors.green,
   },
   cardSectionTitle: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#9CA3AF',
+    color: colors.grayLight,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
@@ -190,7 +219,7 @@ const styles = StyleSheet.create({
     width: 52,
     height: 52,
     borderRadius: 26,
-    backgroundColor: '#D1FAE5',
+    backgroundColor: colors.greenLight,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -201,75 +230,27 @@ const styles = StyleSheet.create({
   agentName: {
     fontSize: 17,
     fontWeight: '700',
-    color: '#111827',
+    color: colors.ink,
   },
   agentAddress: {
     fontSize: 13,
-    color: '#6B7280',
-  },
-  noteRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#F9FAFB',
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-  },
-  noteText: {
-    fontSize: 13,
-    color: '#6B7280',
-    flex: 1,
-  },
-  infoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  infoLabel: {
-    fontSize: 13,
-    color: '#6B7280',
-    width: 72,
-  },
-  infoValue: {
-    flex: 1,
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#111827',
-  },
-  divider: {
-    height: 1,
-    backgroundColor: '#F3F4F6',
-  },
-  primaryButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: GREEN,
-    borderRadius: 14,
-    paddingVertical: 16,
-  },
-  primaryButtonText: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#FFFFFF',
+    color: colors.gray,
   },
   secondaryButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 14,
+    backgroundColor: colors.white,
+    borderRadius: radius.button,
     paddingVertical: 16,
     borderWidth: 1.5,
-    borderColor: GREEN,
+    borderColor: colors.green,
   },
   secondaryButtonText: {
     fontSize: 16,
     fontWeight: '700',
-    color: GREEN,
+    color: colors.green,
   },
   modalOverlay: {
     flex: 1,
@@ -280,7 +261,7 @@ const styles = StyleSheet.create({
   },
   modalCard: {
     width: '100%',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.white,
     borderRadius: 20,
     padding: 24,
     alignItems: 'center',
@@ -289,25 +270,20 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#111827',
+    color: colors.ink,
   },
   modalDesc: {
     fontSize: 13,
-    color: '#6B7280',
+    color: colors.gray,
     textAlign: 'center',
   },
-  qrPlaceholder: {
-    alignItems: 'center',
-    gap: 8,
-    paddingVertical: 16,
-  },
-  qrNote: {
-    fontSize: 12,
-    color: '#9CA3AF',
+  qrWrap: {
+    padding: 16,
+    backgroundColor: colors.white,
   },
   closeButton: {
     width: '100%',
-    backgroundColor: GREEN,
+    backgroundColor: colors.green,
     borderRadius: 12,
     paddingVertical: 14,
     alignItems: 'center',
@@ -315,6 +291,6 @@ const styles = StyleSheet.create({
   closeButtonText: {
     fontSize: 15,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: colors.white,
   },
 });
