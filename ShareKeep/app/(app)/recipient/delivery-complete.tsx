@@ -80,8 +80,22 @@ export default function DeliveryCompleteScreen() {
         comment: comment.trim() || null,
       });
       setExistingReview(review);
-    } catch {
-      Alert.alert('エラー', '評価の送信に失敗しました。もう一度お試しください。');
+    } catch (e) {
+      // 二重評価（UNIQUE(parcel_id) 違反 = Postgres 23505）は「失敗」ではなく
+      // 既に評価済み。投稿済みレビューを取り直して評価済み表示へ復旧する。
+      const code = (e as { code?: string } | null)?.code;
+      const msg = (e instanceof Error ? e.message : String(e ?? '')).toLowerCase();
+      if (code === '23505' || msg.includes('duplicate') || msg.includes('unique')) {
+        try {
+          const existing = await fetchReviewForParcel(parcelId);
+          if (existing) setExistingReview(existing);
+        } catch {
+          /* 取り直し失敗は無視（下の Alert は出さない） */
+        }
+        Alert.alert('評価済み', 'この荷物はすでに評価済みです。');
+      } else {
+        Alert.alert('エラー', '評価の送信に失敗しました。もう一度お試しください。');
+      }
     } finally {
       setSubmitting(false);
     }

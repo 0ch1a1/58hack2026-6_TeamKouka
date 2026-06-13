@@ -143,15 +143,22 @@ comment on function public.get_agent_rating is
   '代理人の平均評価(avg::numeric)と件数を返す。評価0件なら avg_rating は null。';
 
 -- ---------------------------------------------------------------------------
--- 5. 既存 get_agent_locations の拡張（CREATE OR REPLACE）
---    ★元の get_agent_locations 定義はリポジトリ内に見当たらないため、推薦RPC
---      (get_recommendation_candidates) の列構成と features/parcels.ts の戻り型から
---      再構成している。適用前に実DBの元定義を pg_get_functiondef 等で確認し、
---      元の戻り列（user_id/full_name/address/address_detail/latitude/longitude/
---      available_days/start_time/end_time/level/completed_deliveries）を維持したまま
---      avg_rating / review_count の追加分のみをマージすること。
+-- 5. 既存 get_agent_locations を avg_rating / review_count 付きで再定義
+--    ★実DBの現行定義（pg_get_functiondef で取得）を土台に、追加2列だけをマージした。
+--      保持している必須要素:
+--        - LANGUAGE plpgsql / SECURITY DEFINER / SET search_path = public
+--        - ロールガード（delivery_company 専用。代理人個人情報の漏洩防止）
+--        - st_y/st_x(location::geometry) による緯度経度抽出
+--        - level / completed_deliveries は素の値（COALESCE しない）
+--        - order by completed_deliveries desc, full_name
+--    ★戻り型に列を追加するため CREATE OR REPLACE では適用できない（Postgres は戻り型変更を拒否）。
+--      DROP FUNCTION → CREATE FUNCTION とする。
+--    ★SECURITY DEFINER のため、関数内では agent_reviews を RLS に関係なく集計できる
+--      （delivery_company から呼んでも avg_rating が null にならない）。
 -- ---------------------------------------------------------------------------
-create or replace function public.get_agent_locations()
+drop function if exists public.get_agent_locations();
+
+create function public.get_agent_locations()
 returns table (
   user_id              uuid,
   full_name            text,
@@ -160,33 +167,45 @@ returns table (
   latitude             double precision,
   longitude            double precision,
   available_days       text[],
-  start_time           time,
-  end_time             time,
+  start_time           time without time zone,
+  end_time             time without time zone,
   level                integer,
   completed_deliveries integer,
   avg_rating           numeric,
   review_count         integer
 )
-language sql
-stable
-set search_path = public
+language plpgsql
+security definer
+set search_path to 'public'
 as $$
+declare
+  v_role public.user_role;
+begin
+  select role into v_role
+  from public.profiles
+  where id = auth.uid();
+
+  if auth.uid() is not null and v_role <> 'delivery_company' then
+    raise exception 'only delivery company users can read agent locations';
+  end if;
+
+  return query
   select
     ap.user_id,
-    pr.full_name,
+    p.full_name,
     ap.address,
     ap.address_detail,
-    st_y(ap.location::geometry)          as latitude,
-    st_x(ap.location::geometry)          as longitude,
+    st_y(ap.location::geometry) as latitude,
+    st_x(ap.location::geometry) as longitude,
     ap.available_days,
     ap.start_time,
     ap.end_time,
-    coalesce(ap.level, 1)                as level,
-    coalesce(ap.completed_deliveries, 0) as completed_deliveries,
-    rev.avg_rating                       as avg_rating,
-    coalesce(rev.review_count, 0)        as review_count
+    ap.level,
+    ap.completed_deliveries,
+    rev.avg_rating,
+    coalesce(rev.review_count, 0)::int as review_count
   from public.agent_profiles ap
-  join public.profiles pr on pr.id = ap.user_id
+  join public.profiles p on p.id = ap.user_id
   left join (
     select agent_id,
            avg(rating)::numeric as avg_rating,
@@ -194,14 +213,17 @@ as $$
     from public.agent_reviews
     group by agent_id
   ) rev on rev.agent_id = ap.user_id
-  where ap.location is not null;
+  where ap.location is not null
+  order by ap.completed_deliveries desc, p.full_name;
+end;
 $$;
 
 comment on function public.get_agent_locations is
-  '代理人の位置・対応条件・実績に加え、平均評価(avg_rating)/評価件数(review_count)を返す。';
+  '代理人の位置・対応条件・実績に加え、平均評価(avg_rating)/評価件数(review_count)を返す。delivery_company 専用（ロールガード）。';
 
 -- =============================================================================
 -- ★未適用: このマイグレーションは作成のみ。レビュー後に手動適用すること。
 --   - DB へ未適用（supabase db push / apply_migration は未実行）。
---   - get_agent_locations は実DBの元定義を確認の上、追加2列のみをマージして適用。
+--   - get_agent_locations は実DB現行定義（pg_get_functiondef）を土台に追加2列をマージ済み。
+--     ロールガード/SECURITY DEFINER/ORDER BY を保持。戻り型変更のため DROP → CREATE。
 -- =============================================================================
