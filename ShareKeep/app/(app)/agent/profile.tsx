@@ -87,8 +87,19 @@ export default function AgentProfileScreen() {
   const handleSave = async () => {
     // 郵便番号はジオコ精度向上のための任意入力。保存後は address（display_name）に
     // 畳まれ再表示時に復元できないため、必須にすると既存代理人の再保存を妨げる。住所のみ必須。
-    if (!address) {
+    // 空白のみの入力を弾くため trim 後の値で検証・保存する。
+    const trimmedAddress = address.trim();
+    const trimmedRoomNumber = roomNumber.trim();
+    if (!trimmedAddress) {
       Alert.alert('入力エラー', '住所は必須です。');
+      return;
+    }
+    if (trimmedAddress.length > 200) {
+      Alert.alert('入力エラー', '住所は200文字以内で入力してください。');
+      return;
+    }
+    if (trimmedRoomNumber.length > 100) {
+      Alert.alert('入力エラー', '部屋番号・号室は100文字以内で入力してください。');
       return;
     }
     if (selectedDays.length === 0) {
@@ -107,13 +118,13 @@ export default function AgentProfileScreen() {
     // geocode-agent-address は Nominatim に単一住所文字列 q=address を投げるため、
     // ジオコ可能な「郵便番号＋住所本体」のみを address に渡し、部屋番号等は addressDetail に分離する。
     // '郵便番号|住所|部屋' を連結したまま渡すとジオコに失敗するため（A0 確認事項）。
-    const geocodeAddress = [postalCode, address].filter(Boolean).join(' ');
+    const geocodeAddress = [postalCode.trim(), trimmedAddress].filter(Boolean).join(' ');
 
     try {
       await geocodeAgentAddress({
         userId: user.id,
         address: geocodeAddress,
-        addressDetail: roomNumber || undefined,
+        addressDetail: trimmedRoomNumber || undefined,
         availableDays: selectedDays,
         startTime: timeFrom,
         endTime: timeTo,
@@ -195,6 +206,7 @@ export default function AgentProfileScreen() {
               placeholderTextColor="#9CA3AF"
               value={address}
               onChangeText={setAddress}
+              maxLength={200}
             />
           </View>
 
@@ -206,6 +218,7 @@ export default function AgentProfileScreen() {
               placeholderTextColor="#9CA3AF"
               value={roomNumber}
               onChangeText={setRoomNumber}
+              maxLength={100}
             />
           </View>
         </Card>

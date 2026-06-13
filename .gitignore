@@ -1,1 +1,7 @@
 WORK_LOG.md
+
+# 環境変数ファイルはコミットしない（テンプレートの .env.example は追跡する）
+.env
+**/.env
+!.env.example
+!**/.env.example

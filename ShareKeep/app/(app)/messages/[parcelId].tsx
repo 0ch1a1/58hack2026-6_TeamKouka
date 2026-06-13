@@ -166,6 +166,7 @@ export default function MessagesScreen() {
             placeholder="メッセージを入力"
             placeholderTextColor={colors.grayLight}
             multiline
+            maxLength={1000}
             editable={!loading}
           />
           <TouchableOpacity
