@@ -13,10 +13,14 @@ export default function RootLayout() {
       }
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session) {
+    // 画面遷移はサインイン/サインアウトの確定イベントのみで行う。
+    // TOKEN_REFRESHED / USER_UPDATED / INITIAL_SESSION では replace しない
+    // （初期遷移は上の getSession が担当。毎イベントで /(app) に戻すと、
+    //   driver サブルートや代理人画面操作中にトークン更新で巻き戻る）。
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_IN' && session) {
         router.replace('/(app)');
-      } else {
+      } else if (event === 'SIGNED_OUT') {
         router.replace('/(auth)/sign-in');
       }
     });

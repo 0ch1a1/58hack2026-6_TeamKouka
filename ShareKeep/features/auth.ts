@@ -90,6 +90,18 @@ export async function getProfile(userId?: string) {
   return data
 }
 
+const VALID_ROLES: Role[] = ['recipient', 'agent', 'delivery_company']
+
+// get_profile RPC の戻りはオブジェクト/配列いずれの可能性もあるため role を吸収し、
+// enum 3値のいずれかであることを検証して返す（旧値 'driver' や壊れた戻り値は null）。
+// ロール分岐（(app)/index・driver/_layout のガード）で共有する。
+export async function getMyRole(): Promise<Role | null> {
+  const profile = await getProfile()
+  const row = Array.isArray(profile) ? profile[0] : profile
+  const role = row && typeof row === 'object' && 'role' in row ? (row as { role?: unknown }).role : null
+  return typeof role === 'string' && (VALID_ROLES as string[]).includes(role) ? (role as Role) : null
+}
+
 export async function upsertProfile(params: {
   id: string
   role: UserRole

@@ -1,10 +1,11 @@
-import { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView } from 'react-native';
+import { useState, useEffect } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import TreeScene from '../../components/TreeScene';
 import { colors } from '../../lib/theme';
 import { Card } from '../../components/ui';
+import { getMyRole } from '../../features/auth';
 
 type Mode = 'recipient' | 'agent';
 
@@ -21,11 +22,40 @@ const STAGE_LABELS = ['芽吹き', '若木', '成木', '大木', '実りの木']
 
 export default function HomeScreen() {
   const [mode, setMode] = useState<Mode>('recipient');
+  // ロール判定中は受取人/代理人ホームを描かずスピナーを出す（配達員はここで /driver へ送る）。
+  const [roleChecked, setRoleChecked] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        const role = await getMyRole();
+        if (active && role === 'delivery_company') {
+          router.replace('/(app)/driver');
+          return; // 遷移するので roleChecked は立てない（ホームを一瞬も描かない）
+        }
+      } catch {
+        // 取得失敗時は通常ホーム（受取人/代理人）にフォールバック。
+      }
+      if (active) setRoleChecked(true);
+    })();
+    return () => {
+      active = false;
+    };
+  }, []);
 
   // TODO: Supabase から取得した xp・points に差し替え
   const xp = 0;
   const points = 0;
   const stage = xpToStage(xp);
+
+  if (!roleChecked) {
+    return (
+      <SafeAreaView style={[styles.safe, styles.loading]}>
+        <ActivityIndicator size="large" color={colors.green} />
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -128,6 +158,10 @@ const styles = StyleSheet.create({
   safe: {
     flex: 1,
     backgroundColor: colors.bg,
+  },
+  loading: {
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   header: {
     flexDirection: 'row',
