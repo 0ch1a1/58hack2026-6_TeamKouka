@@ -1,18 +1,22 @@
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, StyleProp, ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing } from '../../lib/theme';
 import { presets } from './styles';
 
-// リストが空のときの中央寄せプレースホルダ。各画面の `center` + `emptyText` の重複を置き換える。
+// 空リストのプレースホルダ。各画面の `emptyContainer`（alignItems:center + paddingTop + gap）を置き換える。
+// flex:1 / justifyContent は持たせない（FlatList の ListEmptyComponent としても使うため）。
+// 全画面中央寄せにしたい場合は呼び出し側で style={[presets.centered, ...]} を合成する。
 export function EmptyState({
   message,
   icon,
+  style,
 }: {
   message: string;
   icon?: keyof typeof Ionicons.glyphMap;
+  style?: StyleProp<ViewStyle>;
 }) {
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, style]}>
       {icon && <Ionicons name={icon} size={40} color={colors.grayLight} />}
       <Text style={presets.emptyText}>{message}</Text>
     </View>
@@ -20,5 +24,5 @@ export function EmptyState({
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.md, paddingTop: 60 },
+  container: { alignItems: 'center', paddingTop: 60, gap: spacing.md },
 });
