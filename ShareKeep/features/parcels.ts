@@ -1,6 +1,16 @@
 import { supabase } from '../lib/supabase'
 import type { ParcelStatus } from '../lib/database.types'
 
+// バックエンド連携層（移植）。全 API を一括移植している。
+// STAGE B(Wave1〜2) で実際に使うのは:
+//   createParcel / fetchMyParcels / subscribeParcel / matchNearbyAgent /
+//   findNearbyAgents / updateParcelStatus / generateQrToken / verifyRecipientQr /
+//   verifyAgentQr / geocodeAgentAddress / fetchMyNotifications / markNotificationRead
+// 下記は B 計画(Wave1)では未参照・B以降/将来用（消さず残置）:
+//   createDeliveryCompany / updateDeliveryCompany / deleteDeliveryCompany /
+//   listDeliveryCompanies / getAgentLocations / consumeAgentPoints /
+//   recordAgentDeliveryCompletion / assignAgentToParcel / upsertAgentProfile
+
 // ParcelStatus は database.types.ts を唯一の正とする（A4）
 export type { ParcelStatus }
 
@@ -335,10 +345,12 @@ export async function listDeliveryCompanies() {
   }>
 }
 
-export async function fetchMyNotifications() {
+export async function fetchMyNotifications(userId: string) {
+  // RLS 頼みにせず user_id を明示フィルタ（fetchMyParcels と対称・防御的）
   const { data, error } = await supabase
     .from('notifications')
     .select('*')
+    .eq('user_id', userId)
     .order('created_at', { ascending: false })
 
   if (error) throw error
@@ -363,6 +375,7 @@ export async function recordAgentDeliveryCompletion(agentId: string) {
   return data
 }
 
+// 注意: parcelId は呼び出し側で UUID 形式を保証すること（filter に文字列補間するため）。
 export function subscribeParcel(parcelId: string, onChange: () => void) {
   const channel = supabase
     .channel(`parcel:${parcelId}`)

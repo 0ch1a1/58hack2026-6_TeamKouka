@@ -1,6 +1,6 @@
 import type { ParcelStatus } from './database.types';
 
-// ===== DB status 定数（バックアンド parcel_status enum・唯一の正）=====
+// ===== DB status 定数（バックエンド parcel_status enum・唯一の正）=====
 export const PARCEL_STATUS = {
   CREATED: 'created',
   OUT_FOR_DELIVERY: 'out_for_delivery',
@@ -14,6 +14,10 @@ export const PARCEL_STATUS = {
 // ===== UI 表示ステータス（受取人リストは 3 状態）=====
 export type UIStatus = 'waiting' | 'stored' | 'completed';
 
+// 受取人リストは 3 状態に集約する設計のため、複数の DB status が 'waiting' に潰れる。
+// 例: created / out_for_delivery / delivery_failed / agent_assigned はすべて 'waiting'。
+// → delivery_failed（再配達待ち）も UI 上は「配達待ち」表示になる点は意図的な簡略化。
+//   失敗を区別表示したい場合は UIStatus を増やさず、画面側で生 status を併用すること。
 export function toUIStatus(s: ParcelStatus | string | null): UIStatus {
   if (s === 'completed' || s === 'handed_to_recipient') return 'completed';
   if (s === 'delivered_to_agent') return 'stored';
