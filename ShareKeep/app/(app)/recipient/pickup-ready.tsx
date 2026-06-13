@@ -14,9 +14,12 @@ import { router, useLocalSearchParams } from 'expo-router';
 import QRCode from 'react-native-qrcode-svg';
 import { supabase, getDeliveryMatch } from '../../../lib/supabase';
 import { generateQrToken, subscribeParcel, fetchParcel } from '../../../features/parcels';
+import { fetchDeliveryLocation, subscribeDeliveryLocation } from '../../../features/tracking';
 import { isHandedOff } from '../../../lib/status';
 import { colors, radius } from '../../../lib/theme';
+import type { DeliveryLocation } from '../../../lib/database.types';
 import { ScreenHeader, PrimaryButton, Card, InfoRow } from '../../../components/ui';
+import { DeliveryProgress } from '../../../components/DeliveryProgress';
 import { StorageDeadlineBadge } from '../../../components/StorageDeadlineBadge';
 import { SupportReportForm } from '../../../components/SupportReportForm';
 
@@ -49,6 +52,7 @@ export default function PickupReadyScreen() {
   // 機能6: 保管期限 / 機能8: トラブル報告モーダル
   const [deadlineAt, setDeadlineAt] = useState<string | null>(null);
   const [reportVisible, setReportVisible] = useState(false);
+  const [deliveryLocation, setDeliveryLocation] = useState<DeliveryLocation | null>(null);
 
   useEffect(() => {
     if (!parcelId) { setLoading(false); return; }
@@ -132,6 +136,33 @@ export default function PickupReadyScreen() {
     };
   }, [parcelId]);
 
+  useEffect(() => {
+    if (!parcelId) {
+      setDeliveryLocation(null);
+      return;
+    }
+
+    let active = true;
+    setDeliveryLocation(null);
+
+    fetchDeliveryLocation(parcelId)
+      .then((location) => {
+        if (active) setDeliveryLocation(location);
+      })
+      .catch(() => {
+        if (active) setDeliveryLocation(null);
+      });
+
+    const unsubscribe = subscribeDeliveryLocation(parcelId, (location) => {
+      setDeliveryLocation(location);
+    });
+
+    return () => {
+      active = false;
+      unsubscribe();
+    };
+  }, [parcelId]);
+
   const handleGoNow = () => {
     // TODO: Supabase で「向かっています」ステータスを更新
     Alert.alert('代理人に通知しました', '代理人に「今から向かいます」と伝えました。');
@@ -156,6 +187,11 @@ export default function PickupReadyScreen() {
           <Ionicons name="home-outline" size={20} color={colors.green} />
           <Text style={styles.statusText}>代理人が荷物を預かっています</Text>
         </View>
+
+        <DeliveryProgress
+          progress={deliveryLocation?.progress ?? 0}
+          updatedAt={deliveryLocation?.updated_at}
+        />
 
         <Card>
           <Text style={styles.cardSectionTitle}>代理人の情報</Text>
