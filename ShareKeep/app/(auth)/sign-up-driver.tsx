@@ -9,11 +9,12 @@ import {
   Platform,
   ScrollView,
   Alert,
-  ActivityIndicator,
 } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
+import { colors } from '../../lib/theme';
+import { PrimaryButton } from '../../components/ui';
 
 export default function SignUpDriverScreen() {
   const [name, setName] = useState('');
@@ -78,12 +79,12 @@ export default function SignUpDriverScreen() {
     >
       <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
         <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-          <Ionicons name="chevron-back" size={20} color="#1A7A4C" />
+          <Ionicons name="chevron-back" size={20} color={colors.green} />
           <Text style={styles.backText}>戻る</Text>
         </TouchableOpacity>
 
         <View style={styles.logoRow}>
-          <Ionicons name="leaf" size={26} color="#1A7A4C" />
+          <Ionicons name="leaf" size={26} color={colors.green} />
           <Text style={styles.logo}> ShareKeep</Text>
         </View>
         <Text style={styles.title}>配達員登録</Text>
@@ -92,7 +93,7 @@ export default function SignUpDriverScreen() {
         <TextInput
           style={styles.input}
           placeholder="お名前"
-          placeholderTextColor="#9CA3AF"
+          placeholderTextColor={colors.grayLight}
           value={name}
           onChangeText={setName}
         />
@@ -101,14 +102,14 @@ export default function SignUpDriverScreen() {
         <TextInput
           style={styles.input}
           placeholder="配送会社名（例：ヤマト運輸）"
-          placeholderTextColor="#9CA3AF"
+          placeholderTextColor={colors.grayLight}
           value={companyName}
           onChangeText={setCompanyName}
         />
         <TextInput
           style={styles.input}
           placeholder="社員番号 / ドライバーID"
-          placeholderTextColor="#9CA3AF"
+          placeholderTextColor={colors.grayLight}
           value={employeeId}
           onChangeText={setEmployeeId}
           autoCapitalize="none"
@@ -118,7 +119,7 @@ export default function SignUpDriverScreen() {
         <TextInput
           style={styles.input}
           placeholder="メールアドレス"
-          placeholderTextColor="#9CA3AF"
+          placeholderTextColor={colors.grayLight}
           value={email}
           onChangeText={setEmail}
           autoCapitalize="none"
@@ -127,7 +128,7 @@ export default function SignUpDriverScreen() {
         <TextInput
           style={styles.input}
           placeholder="パスワード（6文字以上）"
-          placeholderTextColor="#9CA3AF"
+          placeholderTextColor={colors.grayLight}
           value={password}
           onChangeText={setPassword}
           secureTextEntry
@@ -135,26 +136,25 @@ export default function SignUpDriverScreen() {
         <TextInput
           style={styles.input}
           placeholder="パスワード（確認）"
-          placeholderTextColor="#9CA3AF"
+          placeholderTextColor={colors.grayLight}
           value={confirmPassword}
           onChangeText={setConfirmPassword}
           secureTextEntry
         />
 
-        <TouchableOpacity style={styles.primaryButton} onPress={handleSignUp} disabled={loading}>
-          {loading ? (
-            <ActivityIndicator color="#FFFFFF" />
-          ) : (
-            <Text style={styles.primaryButtonText}>配達員として登録する</Text>
-          )}
-        </TouchableOpacity>
+        <PrimaryButton
+          label="配達員として登録する"
+          onPress={handleSignUp}
+          loading={loading}
+          style={{ height: 52, width: '100%', marginTop: 16, backgroundColor: colors.driver, borderRadius: 12 }}
+        />
       </ScrollView>
     </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  flex: { flex: 1, backgroundColor: '#F0FAF4' },
+  flex: { flex: 1, backgroundColor: colors.bg },
   container: {
     flexGrow: 1,
     alignItems: 'center',
@@ -168,15 +168,15 @@ const styles = StyleSheet.create({
     marginBottom: 24,
     gap: 2,
   },
-  backText: { fontSize: 14, color: '#1A7A4C', fontWeight: '600' },
+  backText: { fontSize: 14, color: colors.green, fontWeight: '600' },
   logoRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 4 },
-  logo: { fontSize: 28, fontWeight: '800', color: '#1A7A4C' },
-  title: { fontSize: 22, fontWeight: '700', color: '#111827', marginBottom: 28 },
+  logo: { fontSize: 28, fontWeight: '800', color: colors.green },
+  title: { fontSize: 22, fontWeight: '700', color: colors.ink, marginBottom: 28 },
   sectionLabel: {
     alignSelf: 'flex-start',
     fontSize: 12,
     fontWeight: '600',
-    color: '#6B7280',
+    color: colors.gray,
     marginBottom: 8,
     marginTop: 4,
     letterSpacing: 0.5,
@@ -184,23 +184,13 @@ const styles = StyleSheet.create({
   input: {
     width: '100%',
     height: 52,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.white,
     borderRadius: 12,
     paddingHorizontal: 16,
     fontSize: 16,
-    color: '#111827',
+    color: colors.ink,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: '#D1FAE5',
+    borderColor: colors.border,
   },
-  primaryButton: {
-    width: '100%',
-    height: 52,
-    backgroundColor: '#4B5563',
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 16,
-  },
-  primaryButtonText: { color: '#FFFFFF', fontSize: 16, fontWeight: '700' },
 });
