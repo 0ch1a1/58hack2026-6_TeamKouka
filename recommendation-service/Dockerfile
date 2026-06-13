@@ -10,7 +10,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY app ./app
 COPY training ./training
-COPY models/.gitkeep ./models/.gitkeep
+# models/ ごとコピーし、ビルド前に学習した model.joblib を image に焼き込む。
+# 未学習（.gitkeep のみ）なら app/model.py が fallback ルールベースで動く。
+COPY models ./models
 
 EXPOSE 8000
 

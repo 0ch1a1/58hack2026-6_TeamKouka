@@ -51,17 +51,18 @@ supabase db query --linked "select proname from pg_proc where proname in
 → 5件返ればOK。
 
 ### A4. 代理人シード（ランキング成立に必須）
-`ShareKeep/.env` に `SUPABASE_URL` と `SUPABASE_SERVICE_ROLE_KEY` を入れてから：
+`ShareKeep/.env` に `SUPABASE_URL` と `SUPABASE_SERVICE_ROLE_KEY` を入れてから（**リポジトリルートから**）：
 ```bash
 cd ShareKeep
 npm install
 npm run seed:agents      # 代理人8人（距離/時間/実績がバラけた状態）
+cd ..                    # ルートに戻る（次の Part のため）
 ```
-**検証**：
+**検証**（`supabase db query` が無い CLI バージョンでは Dashboard の SQL Editor で同じSQLを実行）：
 ```bash
 supabase db query --linked "select count(*) from agent_profiles where location is not null;"
 ```
-→ 8（前後）件あればOK。デモ後の片付けは `npm run unseed:agents`。
+→ 8（前後）件あればOK。デモ後の片付けは `cd ShareKeep && npm run unseed:agents`。
 
 ### ✅ Part A 完了条件
 - `supabase db push` 成功、上記5関数が存在
@@ -72,6 +73,7 @@ supabase db query --linked "select count(*) from agent_profiles where location i
 ## Part B. ローカル Docker で推薦サービスを動かす
 
 ### B1. サービス用 `.env` を作成
+（**リポジトリルートから**。以降 B は `recommendation-service/` 配下で作業）
 ```bash
 cd recommendation-service
 cp .env.example .env
@@ -86,8 +88,9 @@ RECOMMENDATION_REQUIRE_AUTH=true
 MODEL_PATH=models/model.joblib
 ```
 
-### B2. （任意）モデル学習
-未学習でも **ルールベース fallback** で動く。学習するなら：
+### B2. （任意）モデル学習 ← **build より前に行う**
+未学習でも **ルールベース fallback** で動く。学習する場合は **B3 の docker build より前**に実行すること。
+Dockerfile は `models/` ごと image にコピーするため、ここで生成した `models/model.joblib` がそのまま焼き込まれる（学習せずに build すると常に fallback になる）。
 ```bash
 pip install -r requirements.txt
 python -m training.generate_synthetic
@@ -96,9 +99,10 @@ python -m training.train     # models/model.joblib が生成される
 
 ### B3. build & run
 ```bash
-docker build -t sharekeep-recommendation:local .
+docker build -t sharekeep-recommendation:local .   # B2 済みなら model.joblib も焼き込まれる
 docker run --rm --env-file .env -p 8000:8000 sharekeep-recommendation:local
 ```
+> `/health` の `"fallback": false` で学習済みモデルが乗っているか確認できる（true なら fallback）。
 
 ### B4. `/health` を確認（別ターミナル）
 ```bash
@@ -148,6 +152,7 @@ kind load docker-image sharekeep-recommendation:local --name sharekeep
 > Docker Desktop k8s の場合はこの手順は不要（同じ Docker デーモンを参照するため）。
 
 ### C3. secret を作成（実値・コミットしない）
+（**リポジトリルートから**。B で `recommendation-service/` にいる場合は先に `cd ..`）
 ```bash
 cd k8s/recommendation
 cp secret.example.yaml secret.yaml   # secret.yaml は .gitignore 済み
@@ -172,14 +177,21 @@ kubectl logs deploy/recommendation-api -n sharekeep
 → `recommendation-api-…` が `Running`、readinessProbe(/health) が通ること。
 
 ### C6. port-forward して確認
+`port-forward` は**フォアグラウンドで動き続ける**（ブロックする）ため、**専用ターミナル**で起動し、`curl` は別ターミナルで実行する。
 ```bash
+# ターミナル1（起動したまま）: 既定は localhost のみに bind
 kubectl port-forward svc/recommendation-api 8000:8000 -n sharekeep
+```
+```bash
+# ターミナル2
 curl -s localhost:8000/health
 ```
+> 実機アプリから PC の LAN IP で叩く場合は localhost bind だと届かないため、`--address 0.0.0.0` を付ける：
+> `kubectl port-forward --address 0.0.0.0 svc/recommendation-api 8000:8000 -n sharekeep`（PCのファイアウォール許可も必要）。
 
 ### C7. アプリから接続
-- PC上で port-forward 中なら `EXPO_PUBLIC_RECOMMENDATION_URL=http://<PCのLAN IP>:8000`
-- 実機で LAN が使えない場合は `ngrok http 8000` か `cloudflared` でトンネルし、その https URL を使う
+- シミュレータ／PC上のブラウザなら `EXPO_PUBLIC_RECOMMENDATION_URL=http://localhost:8000`
+- 実機なら `--address 0.0.0.0` で port-forward し `http://<PCのLAN IP>:8000`、または `ngrok http 8000` / `cloudflared` のトンネルURL
 
 ### ✅ Part C 完了条件
 - `kubectl get pods -n sharekeep` で Running
@@ -193,14 +205,15 @@ curl -s localhost:8000/health
 | 症状 | 確認 |
 |---|---|
 | アプリで推薦カードが出ず常に自動マッチ | `EXPO_PUBLIC_RECOMMENDATION_URL` 到達性、`/health` 200、再起動したか |
-| `/recommend` が 401 | 本番は正しい挙動（JWT必須）。curl確認時は一時的に `REQUIRE_AUTH=false` |
+| `/recommend` が 401 | 本番は正しい挙動（JWT必須）。curl確認時は一時的に `RECOMMENDATION_REQUIRE_AUTH=false` |
 | `/recommend` が 404（parcel not found） | 認証ユーザと parcel.recipient_id 不一致。自分の荷物で試す |
-| `/recommend` が 502 candidates | migration 未適用 / 代理人 seed なし / service_role 不正 |
+| `/recommend` が 502 / 500 | migration 未適用 / 代理人 seed なし / `SUPABASE_URL`・`SERVICE_ROLE_KEY`・`ANON_KEY` 不正（`/health` は200でも `/recommend` で初めてDB接続するため）|
 | `/retrain` が 503 | `ADMIN_API_KEY` 未設定。設定し `X-Admin-Key` ヘッダで叩く |
-| Pod が CrashLoopBackOff | `kubectl logs` で env 不足を確認（特に service_role / anon） |
-| 実機から localhost に繋がらない | LAN IP / ngrok / cloudflared を使う |
+| Pod が `CreateContainerConfigError` | 参照する Secret/ConfigMap が未作成。`kubectl apply` 順（configmap→secret→deployment）を確認 |
+| Pod は Running だが `/recommend` がエラー | `kubectl logs` で env 値（service_role/anon）を確認 |
+| 実機から localhost に繋がらない | `--address 0.0.0.0` で port-forward ＋ LAN IP、または ngrok / cloudflared |
 
 ## 注意
 - `SUPABASE_SERVICE_ROLE_KEY` と `ADMIN_API_KEY` は**絶対にコミットしない**（`secret.yaml` は .gitignore 済み）。
-- seed / サービスは**本番DBに書き込む**。デモ後は `npm run unseed:agents`。
+- seed / サービスは**本番DBに書き込む**。デモ後は `cd ShareKeep && npm run unseed:agents`。
 - 推薦APIが落ちてもアプリは**自動マッチにフォールバック**して止まらない（実装済み）。
