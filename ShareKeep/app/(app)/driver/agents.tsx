@@ -14,7 +14,7 @@ import { useLocalSearchParams, router } from 'expo-router';
 import { DriverAgentMap } from '../../../components/DriverAgentMap';
 import { colors, radius, spacing } from '../../../lib/theme';
 import { FALLBACK_LOCATION } from '../../../lib/constants';
-import { ScreenHeader, Card, InfoRow, EmptyState } from '../../../components/ui';
+import { ScreenHeader, Card, InfoRow, EmptyState, MapFallback } from '../../../components/ui';
 import { getAgentLocations, assignAgentToParcel } from '../../../features/parcels';
 import { logError } from '../../../lib/logger';
 
@@ -258,12 +258,7 @@ export default function DriverAgentsScreen() {
                   onError={() => setMapFailed(true)}
                 />
               ) : (
-                <View style={styles.mapFallback}>
-                  <Ionicons name="map-outline" size={28} color={colors.grayLight} />
-                  <Text style={styles.mapFallbackText}>
-                    地図を表示できません。下のリストから選択してください。
-                  </Text>
-                </View>
+                <MapFallback />
               )}
               <Text style={styles.listHint}>
                 ピンまたは下のカードから代理人を選んでください
@@ -282,18 +277,6 @@ const styles = StyleSheet.create({
   emptyState: { paddingTop: 80 },
   listContent: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xxl, gap: spacing.md },
   mapSection: { paddingTop: spacing.sm, paddingBottom: spacing.md, gap: spacing.sm },
-  mapFallback: {
-    height: 120,
-    borderRadius: radius.card,
-    backgroundColor: colors.fieldBg,
-    borderWidth: 1,
-    borderColor: colors.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-    paddingHorizontal: spacing.lg,
-  },
-  mapFallbackText: { fontSize: 13, color: colors.gray, textAlign: 'center' },
   listHint: { fontSize: 12, color: colors.gray, paddingHorizontal: spacing.xs },
   agentCard: { gap: spacing.sm },
   agentCardSelected: { borderWidth: 2, borderColor: colors.driver },

@@ -2,37 +2,15 @@ import { Component, type ReactNode } from 'react';
 import { StyleSheet, View } from 'react-native';
 import MapView, { Marker } from 'react-native-maps';
 import { cardShadow, radius } from '../lib/theme';
+import type { DriverAgentMapItem, DriverAgentMapProps } from './DriverAgentMap.types';
 
-export type DriverAgentMapItem = {
-  user_id: string;
-  full_name: string;
-  address: string | null;
-  latitude: number;
-  longitude: number;
-};
-
-type Region = {
-  latitude: number;
-  longitude: number;
-  latitudeDelta: number;
-  longitudeDelta: number;
-};
-
-type DriverAgentMapProps = {
-  region: Region;
-  agents: DriverAgentMapItem[];
-  selectedId: string | null;
-  onSelect: (agent: DriverAgentMapItem) => void;
-  onError: () => void;
-};
-
-export function DriverAgentMap({
+export function DriverAgentMap<TAgent extends DriverAgentMapItem>({
   region,
   agents,
   selectedId,
   onSelect,
   onError,
-}: DriverAgentMapProps) {
+}: DriverAgentMapProps<TAgent>) {
   return (
     <MapErrorBoundary onError={onError}>
       <View style={styles.mapWrap}>

@@ -7,4 +7,5 @@ export { QuestStatusBar } from './QuestStatusBar';
 export { Screen } from './Screen';
 export { SectionTitle } from './SectionTitle';
 export { EmptyState } from './EmptyState';
+export { MapFallback } from './MapFallback';
 export { presets } from './styles';
