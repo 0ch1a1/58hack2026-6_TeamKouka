@@ -47,14 +47,19 @@ class RecommendationService:
     def recommend(
         self,
         request: RecommendRequest,
+        *,
         latitude: float,
         longitude: float,
+        recipient_id: str | None,
+        parcel_id: str | None,
     ) -> RecommendResponse:
+        # recipient_id / parcel_id は呼び出し側 (main.py) で認証トークンを正として
+        # 解決済みのものを受け取る。client 申告値をログに焼かないことで詐称を防ぐ。
         target_at = request.target_at or datetime.now(timezone.utc)
 
         candidates = self._fetch_candidates(latitude, longitude, request.radius_m)
         ranked = self._rank_candidates(candidates, target_at)
-        self._persist_logs(request, ranked)
+        self._persist_logs(parcel_id, recipient_id, ranked)
         recommendations = self._build_recommendations(ranked, request.top_k)
 
         return RecommendResponse(
@@ -103,17 +108,18 @@ class RecommendationService:
         return ranked
 
     def _persist_logs(
-        self, request: RecommendRequest, ranked: list[dict[str, Any]]
+        self,
+        parcel_id: str | None,
+        recipient_id: str | None,
+        ranked: list[dict[str, Any]],
     ) -> None:
         log_rows: list[dict[str, Any]] = []
         for index, item in enumerate(ranked, start=1):
             candidate = item["candidate"]
             log_rows.append(
                 {
-                    "parcel_id": str(request.parcel_id) if request.parcel_id else None,
-                    "recipient_id": str(request.recipient_id)
-                    if request.recipient_id
-                    else None,
+                    "parcel_id": parcel_id,
+                    "recipient_id": recipient_id,
                     "candidate_agent_id": str(candidate["user_id"]),
                     "features": item["features"],
                     "score": float(item["score"]),

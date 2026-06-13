@@ -53,10 +53,18 @@ export async function recommendAgents(params: {
   // 末尾スラッシュの有無で // にならないよう正規化。
   const base = RECOMMENDATION_URL.replace(/\/+$/, '')
 
+  // ログインセッションの access_token を Bearer で送る。サーバはこれを検証して
+  // recipient_id を確定する（クライアント詐称防止）。アプリのバンドルに秘密鍵は持たない。
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+  const { data: { session } } = await supabase.auth.getSession()
+  if (session?.access_token) {
+    headers.Authorization = `Bearer ${session.access_token}`
+  }
+
   // undefined のキーは JSON.stringify が落とすため、サーバ側 default（radius_m=2000 等）が効く。
   const res = await fetch(`${base}/recommend`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     body: JSON.stringify({
       parcel_id: params.parcelId,
       recipient_id: params.recipientId,
