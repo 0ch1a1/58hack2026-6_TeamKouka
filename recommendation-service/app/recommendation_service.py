@@ -7,6 +7,7 @@ from app.config import Settings
 from app.features import build_features
 from app.model import RecommendationModel, build_reasons
 from app.schemas import (
+    ExcludedSpot,
     RecommendationItem,
     RecommendRequest,
     RecommendResponse,
@@ -24,6 +25,87 @@ class LogPersistError(RuntimeError):
 
 def _round_breakdown(values: dict[str, float]) -> dict[str, float]:
     return {key: round(float(value), 6) for key, value in values.items()}
+
+
+def _to_int(value: Any) -> int | None:
+    if value is None:
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _exclusion_reason(
+    candidate: dict[str, Any], *, allow_individual_spots: bool
+) -> str | None:
+    """ハードフィルタ。除外なら理由文字列、残すなら None を返す。
+
+    判定は指定の順序で行い、最初に一致した理由のみを採用する。
+    """
+    if candidate.get("review_status") != "approved":
+        return "審査未承認のため除外"
+    if candidate.get("is_available_today") is False:
+        return "本日対応停止のため除外"
+    current = _to_int(candidate.get("current_storage_count"))
+    maximum = _to_int(candidate.get("max_storage_count"))
+    if current is not None and maximum is not None and current >= maximum:
+        return "空き枠なしのため除外"
+    if candidate.get("spot_type") == "individual" and not allow_individual_spots:
+        return "個人スポットNG設定のため除外"
+    return None
+
+
+def _split_candidates(
+    candidates: list[dict[str, Any]], *, allow_individual_spots: bool
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """候補を kept / excluded に分割する。
+
+    excluded には除外理由を付与した辞書 (`candidate` と `reason`) を格納する。
+    """
+    kept: list[dict[str, Any]] = []
+    excluded: list[dict[str, Any]] = []
+    for candidate in candidates:
+        reason = _exclusion_reason(
+            candidate, allow_individual_spots=allow_individual_spots
+        )
+        if reason is None:
+            kept.append(candidate)
+        else:
+            excluded.append({"candidate": candidate, "reason": reason})
+    return kept, excluded
+
+
+def _format_pickup_window(candidate: dict[str, Any]) -> str:
+    start = _format_hhmm(candidate.get("start_time"))
+    end = _format_hhmm(candidate.get("end_time"))
+    if start is None or end is None:
+        return "受取時間未設定"
+    return f"本日 {start}〜{end}"
+
+
+def _format_hhmm(value: Any) -> str | None:
+    """start_time/end_time を HH:MM へ正規化。null/解釈不能なら None。"""
+    if value is None:
+        return None
+    text = str(value).strip()
+    if not text:
+        return None
+    parts = text.split(":")
+    if len(parts) < 2:
+        return None
+    try:
+        hour = int(parts[0])
+        minute = int(parts[1])
+    except ValueError:
+        return None
+    return f"{hour:02d}:{minute:02d}"
+
+
+def _capacity_label(candidate: dict[str, Any]) -> str:
+    maximum = _to_int(candidate.get("max_storage_count")) or 0
+    current = _to_int(candidate.get("current_storage_count")) or 0
+    return f"空き枠 {maximum - current}/{maximum}"
 
 
 class RecommendationService:
@@ -58,7 +140,12 @@ class RecommendationService:
         target_at = request.target_at or datetime.now(timezone.utc)
 
         candidates = self._fetch_candidates(latitude, longitude, request.radius_m)
-        ranked = self._rank_candidates(candidates, target_at)
+        # 取得後・スコアリング前にハードフィルタを適用。除外候補はスコアリングも
+        # recommendation_logs への記録も行わない。
+        kept, excluded = _split_candidates(
+            candidates, allow_individual_spots=request.allow_individual_spots
+        )
+        ranked = self._rank_candidates(kept, target_at)
         self._persist_logs(parcel_id, recipient_id, ranked)
         recommendations = self._build_recommendations(ranked, request.top_k)
 
@@ -66,6 +153,8 @@ class RecommendationService:
             model_version=self._model.version,
             generated_at=datetime.now(timezone.utc),
             recommendations=recommendations,
+            excluded=self._build_excluded(excluded),
+            fallback_used=self._model.is_fallback,
         )
 
     def _fetch_candidates(
@@ -154,6 +243,26 @@ class RecommendationService:
                         item["breakdown"],
                         distance_meters=distance_meters,
                     ),
+                    spot_type=str(candidate.get("spot_type") or ""),
+                    capacity_label=_capacity_label(candidate),
+                    pickup_window_label=_format_pickup_window(candidate),
                 )
             )
         return recommendations
+
+    def _build_excluded(
+        self, excluded: list[dict[str, Any]]
+    ) -> list[ExcludedSpot]:
+        spots: list[ExcludedSpot] = []
+        for entry in excluded:
+            candidate = entry["candidate"]
+            distance_meters = float(candidate.get("distance_meters") or 0)
+            spots.append(
+                ExcludedSpot(
+                    agent_id=candidate["user_id"],
+                    full_name=candidate.get("full_name"),
+                    distance_meters=round(distance_meters, 2),
+                    reason=entry["reason"],
+                )
+            )
+        return spots
