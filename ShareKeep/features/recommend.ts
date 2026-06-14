@@ -10,6 +10,9 @@ import { supabase } from '../lib/supabase'
 // キーはモデル次第で増減しうるため固定 union にせず Record で受ける。
 export type RecommendationBreakdown = Record<string, number>
 
+// 受け渡し先スポットの種別。店舗/施設/管理人室/個人宅 を区別し、UI でバッジ表示する。
+export type SpotType = 'store' | 'facility' | 'manager_room' | 'individual'
+
 export type RecommendedAgent = {
   agent_id: string
   full_name: string | null
@@ -18,12 +21,36 @@ export type RecommendedAgent = {
   distance_meters: number
   breakdown: RecommendationBreakdown
   reasons: string[]
+  // 受け渡し先の種別・空き枠・受け取り時間帯。推薦サービス拡張で追加（旧 API では欠落しうる）。
+  spot_type?: SpotType
+  capacity_label?: string // 例: "空き枠 2/5"
+  pickup_window_label?: string // 例: "本日 18:00〜21:00"
+}
+
+// 候補から除外された代理人（理由付き）。「なぜ絞り込まれたか」を UI で開示するために返る。
+// full_name は API(ExcludedSpot)側が nullable のため型を合わせる。
+export type ExcludedAgent = {
+  agent_id: string
+  full_name: string | null
+  distance_meters: number
+  reason: string
 }
 
 export type RecommendResponse = {
   model_version: string
   generated_at: string
   recommendations: RecommendedAgent[]
+  // フィルタで除外された候補（任意・旧 API では欠落）。
+  excluded?: ExcludedAgent[]
+  // フォールバック経路（緩和した条件）で結果を返したか。
+  fallback_used?: boolean
+}
+
+// recommendAgents の戻り値。候補配列に加えて除外候補・フォールバック有無を同梱する。
+export type RecommendResult = {
+  agents: RecommendedAgent[]
+  excluded: ExcludedAgent[]
+  fallbackUsed: boolean
 }
 
 // サービス URL（デプロイ先）。未デプロイ時は未設定 → isRecommendationEnabled() が false。
@@ -45,7 +72,7 @@ export async function recommendAgents(params: {
   radiusMeters?: number
   topK?: number
   targetAt?: string
-}): Promise<RecommendedAgent[]> {
+}): Promise<RecommendResult> {
   if (!RECOMMENDATION_URL) {
     throw new Error('EXPO_PUBLIC_RECOMMENDATION_URL が未設定です')
   }
@@ -73,6 +100,8 @@ export async function recommendAgents(params: {
       radius_m: params.radiusMeters,
       top_k: params.topK,
       target_at: params.targetAt,
+      // デモ条件「個人スポットNG」: 個人宅スポットは候補から除外させる。
+      allow_individual_spots: false,
     }),
   })
 
@@ -90,10 +119,24 @@ export async function recommendAgents(params: {
 
   const data = (await res.json()) as RecommendResponse
   // agent_id は UUID（string）想定だが、念のため string 化して UI/RPC で安全に扱う。
-  return (data.recommendations ?? []).map((item) => ({
+  // 新フィールド（spot_type / capacity_label / pickup_window_label）は item に含まれていれば
+  // スプレッドでそのまま引き継がれる。旧 API で欠落しても undefined のままで安全（UI 側で出し分け）。
+  const agents = (data.recommendations ?? []).map((item) => ({
     ...item,
     agent_id: String(item.agent_id),
   }))
+
+  // 除外候補（旧 API では欠落）。欠落時は空配列にしてクラッシュを避ける。
+  const excluded = (data.excluded ?? []).map((item) => ({
+    ...item,
+    agent_id: String(item.agent_id),
+  }))
+
+  return {
+    agents,
+    excluded,
+    fallbackUsed: data.fallback_used ?? false,
+  }
 }
 
 // 受取人が中間者を確定したら選択ラベルを記録（再学習の教師ラベルA）。
