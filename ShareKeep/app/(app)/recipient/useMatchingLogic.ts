@@ -13,6 +13,7 @@ import {
   recommendAgents,
   isRecommendationEnabled,
   type RecommendedAgent,
+  type ExcludedAgent,
 } from '../../../features/recommend';
 
 export type MatchingMode = 'loading' | 'select';
@@ -20,6 +21,8 @@ export type MatchingMode = 'loading' | 'select';
 export type MatchingLogic = {
   mode: MatchingMode;
   candidates: RecommendedAgent[];
+  // ハードフィルタで除外された候補（「除外された候補」セクションで理由を開示）。
+  excluded: ExcludedAgent[];
   // 選択済み代理人ID一覧。順序 = 優先度（先頭が最優先）。
   selectedIds: string[];
   saving: boolean;
@@ -32,6 +35,7 @@ export type MatchingLogic = {
 export function useMatchingLogic(parcelId: string | undefined): MatchingLogic {
   const [mode, setMode] = useState<MatchingMode>('loading');
   const [candidates, setCandidates] = useState<RecommendedAgent[]>([]);
+  const [excluded, setExcluded] = useState<ExcludedAgent[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const cancelledRef = useRef(false);
@@ -78,6 +82,7 @@ export function useMatchingLogic(parcelId: string | undefined): MatchingLogic {
 
       // ML推薦サービスが有効なら候補をスコア順で取得。無効・失敗時はフォールバック。
       let agents: RecommendedAgent[] = [];
+      let excludedAgents: ExcludedAgent[] = [];
 
       if (isRecommendationEnabled()) {
         try {
@@ -90,6 +95,8 @@ export function useMatchingLogic(parcelId: string | undefined): MatchingLogic {
             topK: 8,
           });
           agents = result.agents;
+          // 個人NG/満枠/審査外などで除外された候補（理由付き）。UIで開示する。
+          excludedAgents = result.excluded;
         } catch {
           // fall through to fallback
         }
@@ -117,6 +124,7 @@ export function useMatchingLogic(parcelId: string | undefined): MatchingLogic {
 
       if (cancelled) return;
       setCandidates(agents);
+      setExcluded(excludedAgents);
       // 先頭候補を初期選択
       if (agents.length > 0) setSelectedIds([agents[0].agent_id]);
       setMode('select');
@@ -176,5 +184,5 @@ export function useMatchingLogic(parcelId: string | undefined): MatchingLogic {
     router.back();
   }, [parcelId, selectedIds, saving]);
 
-  return { mode, candidates, selectedIds, saving, toggleAgent, moveUp, moveDown, confirmWhitelist };
+  return { mode, candidates, excluded, selectedIds, saving, toggleAgent, moveUp, moveDown, confirmWhitelist };
 }

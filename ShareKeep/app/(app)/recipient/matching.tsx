@@ -12,7 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams } from 'expo-router';
 import { colors } from '../../../lib/theme';
 import { ScreenHeader, Card, PrimaryButton } from '../../../components/ui';
-import { type RecommendedAgent, type SpotType } from '../../../features/recommend';
+import { type RecommendedAgent, type ExcludedAgent, type SpotType } from '../../../features/recommend';
 import { useMatchingLogic } from './useMatchingLogic';
 import { LoadingDots } from './LoadingDots';
 import { factorsFromBreakdown, type ScoreFactors } from '../../../lib/scoring';
@@ -48,13 +48,14 @@ function formatDistance(meters: number): string {
 export default function MatchingScreen() {
   const { parcelId } = useLocalSearchParams<{ parcelId: string; trackingNumber: string }>();
 
-  const { mode, candidates, selectedIds, saving, toggleAgent, moveUp, moveDown, confirmWhitelist } =
+  const { mode, candidates, excluded, selectedIds, saving, toggleAgent, moveUp, moveDown, confirmWhitelist } =
     useMatchingLogic(parcelId);
 
   if (mode === 'select') {
     return (
       <SelectView
         candidates={candidates}
+        excluded={excluded}
         selectedIds={selectedIds}
         saving={saving}
         onToggle={toggleAgent}
@@ -70,6 +71,7 @@ export default function MatchingScreen() {
 
 function SelectView({
   candidates,
+  excluded,
   selectedIds,
   saving,
   onToggle,
@@ -78,6 +80,7 @@ function SelectView({
   onConfirm,
 }: {
   candidates: RecommendedAgent[];
+  excluded: ExcludedAgent[];
   selectedIds: string[];
   saving: boolean;
   onToggle: (agentId: string) => void;
@@ -171,6 +174,18 @@ function SelectView({
             />
           );
         })}
+
+        {/* 除外された候補（個人NG/満枠/審査外などの理由を開示）。0件なら非表示。 */}
+        {excluded.length > 0 && (
+          <View style={styles.excludedSection}>
+            <Text style={styles.excludedTitle}>除外された候補</Text>
+            {excluded.map((item) => (
+              <Text key={item.agent_id} style={styles.excludedItem}>
+                {(item.full_name ?? '代理人')} ・ {formatDistance(item.distance_meters)} ・ {item.reason}
+              </Text>
+            ))}
+          </View>
+        )}
       </ScrollView>
 
       <View style={styles.footer}>
@@ -336,6 +351,15 @@ const styles = StyleSheet.create({
   listContent: { padding: 16, paddingBottom: 24, gap: 12 },
   intro: { fontSize: 14, color: colors.gray, lineHeight: 22 },
   sectionLabel: { fontSize: 13, fontWeight: '700', color: colors.gray, marginTop: 4 },
+  excludedSection: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: colors.grayLight,
+    gap: 6,
+  },
+  excludedTitle: { fontSize: 13, fontWeight: '700', color: colors.gray },
+  excludedItem: { fontSize: 12, color: colors.grayLight, lineHeight: 18 },
 
   // ホワイトリストプレビュー
   whitelistSection: { backgroundColor: colors.greenLight, borderRadius: 14, padding: 12, gap: 8 },
