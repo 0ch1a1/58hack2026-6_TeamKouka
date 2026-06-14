@@ -116,27 +116,35 @@ export async function geocodeAgentAddress(params: {
   startTime?: string
   endTime?: string
 }) {
-  const { data, error } = await supabase.functions.invoke('geocode-agent-address', {
-    body: {
-      userId: params.userId,
-      address: params.address,
-      addressDetail: params.addressDetail ?? null,
-      availableDays: params.availableDays ?? null,
-      startTime: params.startTime ?? null,
-      endTime: params.endTime ?? null,
-    },
-  })
+  // Nominatim で住所 → 座標に変換し、直接 upsert_agent_profile RPC を呼ぶ。
+  // (旧実装は Edge Function 経由だったが未デプロイのためクライアント直接実装に変更)
+  const query = encodeURIComponent(params.address)
+  const geoRes = await fetch(
+    `https://nominatim.openstreetmap.org/search?q=${query}&format=json&limit=1`,
+    { headers: { 'Accept-Language': 'ja', 'User-Agent': 'ShareKeep/1.0' } },
+  )
+  if (!geoRes.ok) throw new Error(`Geocoding failed: ${geoRes.status}`)
 
+  const geoData = (await geoRes.json()) as Array<{ lat: string; lon: string; display_name: string }>
+  if (!geoData.length) throw new Error('住所が見つかりませんでした')
+
+  const lat = parseFloat(geoData[0].lat)
+  const lng = parseFloat(geoData[0].lon)
+  const displayName = geoData[0].display_name
+
+  const { error } = await supabase.rpc('upsert_agent_profile', {
+    p_user_id: params.userId,
+    p_address: displayName,
+    p_address_detail: params.addressDetail ?? null,
+    p_lat: lat,
+    p_lng: lng,
+    p_available_days: params.availableDays ?? null,
+    p_start_time: params.startTime ?? null,
+    p_end_time: params.endTime ?? null,
+  })
   if (error) throw error
-  return data as {
-    success: boolean
-    address?: string
-    addressDetail?: string | null
-    latitude?: number
-    longitude?: number
-    profile?: unknown
-    error?: string
-  }
+
+  return { success: true, address: displayName, latitude: lat, longitude: lng }
 }
 
 export async function getAgentLocations() {
