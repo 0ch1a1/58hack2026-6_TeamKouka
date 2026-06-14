@@ -133,6 +133,11 @@ export default function AgentParcelsScreen() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'delivery_matches' }, () => {
         fetchParcels();
       })
+      // 配達員が代理人QRを読むと parcels.status が delivered_to_agent に変わるが、
+      // delivery_matches は変化しないため、parcels も購読して請負リストのステータスを更新する。
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'parcels' }, () => {
+        fetchParcels();
+      })
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
