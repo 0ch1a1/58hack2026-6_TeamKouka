@@ -6,19 +6,20 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import { colors, spacing, radius } from '../../../lib/theme';
 import { ScreenHeader, Card, PrimaryButton } from '../../../components/ui';
 import { verifyAgentQr, fetchParcel, updateParcelStatus } from '../../../features/parcels';
-import { sendMessage } from '../../../features/messages';
 import { isDemoQrToken } from '../../../lib/mockDemo';
 import { logError } from '../../../lib/logger';
-
-function isValidUuid(s: string): boolean {
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s);
-}
 
 // 代理人QR読み取り（配達員向け）。
 // 代理人が提示する agent QR をカメラで読み、verifyAgentQr で荷物を
 // delivered_to_agent（代理人へ受け渡し済み）まで進める。
 // verify-agent-qr Edge Function は冪等化済みで、used 更新 / status 遷移 /
 // 副作用はサーバ側トランザクションで処理する。失敗時は throw される。
+//
+// 注意: 受け渡し後のチャット（handover_messages）は受取人 ⇆ 代理人 のみが参加者
+// （RLS で recipient_id / assigned_agent_id 本人に限定）。配達員はチャットの参加者で
+// はないため、この画面からチャットへ遷移したり配達員名義でメッセージを送ることはしない。
+// 受け渡し完了を相手に通知したい場合はサーバ側（verify-agent-qr）でシステムメッセージを
+// 投入する設計に寄せること（クライアントから配達員名義で送ると RLS で弾かれる）。
 
 // エラー出し分け用の種別。
 type ErrorKind = 'invalid' | 'expired' | 'network';
@@ -105,11 +106,6 @@ export default function DriverScanScreen() {
           } catch {
             setStatusConfirmed(null);
           }
-          if (isValidUuid(parcelId)) {
-            try {
-              await sendMessage(parcelId, '配達員から代理人に荷物が受け渡されました。代理人の方よりご連絡をお待ちください。');
-            } catch { /* 自動メッセージ失敗は無視 */ }
-          }
         } else {
           setStatusConfirmed(null);
         }
@@ -137,9 +133,6 @@ export default function DriverScanScreen() {
         } catch (error) {
           logError('driver/scan:fetchParcel', error);
           setStatusConfirmed(null);
-          if (isValidUuid(parcelId)) {
-            try { await sendMessage(parcelId, '配達員から代理人に荷物が受け渡されました。代理人の方よりご連絡をお待ちください。'); } catch { /* 無視 */ }
-          }
           setPhase('done');
           return;
         }
@@ -148,9 +141,6 @@ export default function DriverScanScreen() {
           setPhase('done');
         } else if (parcel.status === 'delivered_to_agent') {
           setStatusConfirmed(true);
-          if (isValidUuid(parcelId)) {
-            try { await sendMessage(parcelId, '配達員から代理人に荷物が受け渡されました。代理人の方よりご連絡をお待ちください。'); } catch { /* 無視 */ }
-          }
           setPhase('done');
         } else {
           setStatusConfirmed(false);
@@ -260,15 +250,7 @@ export default function DriverScanScreen() {
               </View>
             )}
           </Card>
-          {parcelId && isValidUuid(parcelId) && (
-            <PrimaryButton
-              label="チャットを確認する"
-              icon="chatbubbles-outline"
-              onPress={() => router.replace({ pathname: '/(app)/messages/[parcelId]', params: { parcelId } })}
-              style={styles.chatButton}
-            />
-          )}
-          <PrimaryButton label="一覧に戻る" icon="arrow-back" onPress={() => router.back()} style={parcelId && isValidUuid(parcelId) ? styles.secondaryButton : undefined} />
+          <PrimaryButton label="一覧に戻る" icon="arrow-back" onPress={() => router.back()} />
         </View>
       )}
 
@@ -351,7 +333,6 @@ const styles = StyleSheet.create({
   resultTitle: { fontSize: 17, fontWeight: '700', color: colors.green },
   errorTitle: { fontSize: 17, fontWeight: '700', color: '#DC2626' },
   warnTitle: { fontSize: 17, fontWeight: '700', color: '#D97706' },
-  chatButton: { backgroundColor: colors.green },
   secondaryButton: { backgroundColor: colors.grayLight },
   resultSub: { fontSize: 14, color: colors.gray, marginTop: spacing.sm, lineHeight: 20 },
   confirmRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginTop: spacing.md },
