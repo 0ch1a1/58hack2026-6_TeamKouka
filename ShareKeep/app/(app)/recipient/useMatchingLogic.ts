@@ -76,7 +76,7 @@ export function useMatchingLogic(parcelId: string | undefined): MatchingLogic {
       try {
         await matchNearbyAgent({ parcelId: parcelId!, latitude, longitude, radiusMeters: SEARCH_RADIUS_M });
       } catch {
-        Alert.alert('エラー', '代理人の手配に失敗しました。しばらくしてからもう一度お試しください。');
+        Alert.alert('エラー', '代理受取スポットの手配に失敗しました。しばらくしてからもう一度お試しください。');
         return;
       }
       beginWaiting();
@@ -125,7 +125,7 @@ export function useMatchingLogic(parcelId: string | undefined): MatchingLogic {
         try {
           const { status } = await Location.requestForegroundPermissionsAsync();
           if (status !== 'granted') {
-            Alert.alert('位置情報の許可が必要です', '近くの代理人を探すために位置情報の利用を許可してください。');
+            Alert.alert('位置情報の許可が必要です', '近くの代理受取スポットを探すために位置情報の利用を許可してください。');
             return;
           }
           const position = await Location.getCurrentPositionAsync({});
@@ -204,7 +204,7 @@ export function useMatchingLogic(parcelId: string | undefined): MatchingLogic {
     } catch {
       if (cancelledRef.current) return;
       setAssigning(false);
-      Alert.alert('エラー', '代理人の確定に失敗しました。もう一度お試しください。');
+      Alert.alert('エラー', '代理受取スポットの確定に失敗しました。もう一度お試しください。');
       return;
     }
 

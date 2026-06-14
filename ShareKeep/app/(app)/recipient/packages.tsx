@@ -251,7 +251,7 @@ function PackageCard({ pkg }: { pkg: Package }) {
       {pkg.agentName && (
         <View style={styles.agentRow}>
           <Ionicons name="person-outline" size={14} color={colors.green} />
-          <Text style={styles.agentText}>代理人: {pkg.agentName}</Text>
+          <Text style={styles.agentText}>代理受取スポット: {pkg.agentName}</Text>
         </View>
       )}
 

@@ -155,7 +155,7 @@ export default function HomeAddressScreen() {
         </View>
         <Text style={styles.lead}>
           自宅を登録すると、いまいる場所に関係なく{'\n'}
-          自宅の近所の代理人をおすすめできます。
+          自宅の近所の代理受取スポットをおすすめできます。
         </Text>
 
         {loading ? (

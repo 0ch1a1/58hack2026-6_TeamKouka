@@ -8,14 +8,14 @@ import {
 describe('DeliveryProgress', () => {
   it('renders estimated remaining minutes', () => {
     const { getByText } = render(<DeliveryProgress progress={40} />);
-    expect(getByText('代理人が近づいています')).toBeTruthy();
+    expect(getByText('荷物が代理受取スポットに近づいています')).toBeTruthy();
     expect(getByText('あと約6分')).toBeTruthy();
     expect(getByText('40%')).toBeTruthy();
   });
 
   it('renders arrival state at 100 percent', () => {
     const { getByText } = render(<DeliveryProgress progress={100} />);
-    expect(getByText('代理人が到着しました')).toBeTruthy();
+    expect(getByText('荷物が代理受取スポットに到着しました')).toBeTruthy();
     expect(getByText('到着しました')).toBeTruthy();
     expect(getByText('100%')).toBeTruthy();
   });

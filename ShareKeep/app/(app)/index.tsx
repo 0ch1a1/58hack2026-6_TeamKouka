@@ -127,7 +127,7 @@ function RecipientContent() {
     <Card style={styles.contentCard}>
       <Text style={styles.contentTitle}>荷物を受け取る</Text>
       <Text style={styles.contentDesc}>
-        不在時の荷物を近所の代理人に一時保管してもらえます。
+        不在時の荷物を近所の代理受取スポットに一時保管してもらえます。
       </Text>
       <TouchableOpacity
         style={styles.actionButton}
@@ -142,7 +142,7 @@ function RecipientContent() {
 function AgentContent() {
   return (
     <Card style={styles.contentCard}>
-      <Text style={styles.contentTitle}>代理人として活動する</Text>
+      <Text style={styles.contentTitle}>代理受取スポットとして活動する</Text>
       <Text style={styles.contentDesc}>
         近所の荷物を預かってCO2削減に貢献しましょう。
       </Text>

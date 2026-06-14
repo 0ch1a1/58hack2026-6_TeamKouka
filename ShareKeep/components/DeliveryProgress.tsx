@@ -43,7 +43,7 @@ export function DeliveryProgress({ progress, updatedAt }: Props) {
             color={arrived ? colors.greenDark : colors.green}
           />
           <Text style={styles.title}>
-            {arrived ? '代理人が到着しました' : '代理人が近づいています'}
+            {arrived ? '荷物が代理受取スポットに到着しました' : '荷物が代理受取スポットに近づいています'}
           </Text>
         </View>
         <Text style={styles.percent}>{normalized}%</Text>
