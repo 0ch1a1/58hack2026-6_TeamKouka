@@ -20,6 +20,8 @@ alter table public.agent_profiles
   add column if not exists max_storage_count     int     not null default 5,
   add column if not exists current_storage_count int     not null default 0,
   add column if not exists is_available_today    boolean not null default true,
+  -- 既定 'approved': 既存デモ代理人を可視のまま保つMVP方針(grandfathering)。
+  -- 本番では default 'pending_review' とし、審査通過分だけ明示的に approved へ更新すること。
   add column if not exists review_status         text    not null default 'approved';
 
 do $$
@@ -42,6 +44,21 @@ begin
     alter table public.agent_profiles
       add constraint agent_profiles_review_status_check
       check (review_status in ('pending_review', 'approved', 'rejected', 'suspended'));
+  end if;
+
+  -- 保管枠の整合性: 非負かつ current <= max（空き枠表示・満枠判定が壊れないように）
+  if not exists (
+    select 1 from pg_constraint
+    where conname = 'agent_profiles_storage_count_check'
+      and conrelid = 'public.agent_profiles'::regclass
+  ) then
+    alter table public.agent_profiles
+      add constraint agent_profiles_storage_count_check
+      check (
+        max_storage_count >= 0
+        and current_storage_count >= 0
+        and current_storage_count <= max_storage_count
+      );
   end if;
 end$$;
 
