@@ -65,7 +65,8 @@ from (values
     ('sharekeep-seed-agent-8@example.com', 'おとなり個人宅')
 ) as v(email, full_name)
 join auth.users au on au.email = v.email
-where pr.id = au.id;
+where pr.id = au.id
+  and pr.role = 'agent';  -- 念のためのロールガード（agent以外の表示名は書き換えない）
 
 -- -----------------------------------------------------------------------------
 -- 2) スポット属性(agent_profiles) を一括 UPDATE。安定キー = auth.users.email。
@@ -103,5 +104,33 @@ where ap.user_id = au.id;
 -- join auth.users au on au.id = ap.user_id
 -- where au.email like 'sharekeep-seed-agent-%@example.com'
 -- order by au.email;
+
+-- -----------------------------------------------------------------------------
+-- 4) ポストコンディション: 期待件数に満たなければ例外で全ロールバック。
+--    seed-agents 未投入などで「静かに0行更新」して気づかない事故を防ぐ（fail-loud）。
+-- -----------------------------------------------------------------------------
+do $$
+declare
+  v_agents      int;
+  v_individuals int;
+begin
+  select count(*) into v_agents
+  from public.agent_profiles ap
+  join auth.users au on au.id = ap.user_id
+  where au.email like 'sharekeep-seed-agent-%@example.com';
+
+  select count(*) into v_individuals
+  from public.agent_profiles ap
+  join auth.users au on au.id = ap.user_id
+  where au.email like 'sharekeep-seed-agent-%@example.com'
+    and ap.spot_type = 'individual';
+
+  if v_agents < 8 then
+    raise exception 'seed_spots: 期待8件中 % 件のみ一致。seed-agents の投入状況を確認してください。', v_agents;
+  end if;
+  if v_individuals < 2 then
+    raise exception 'seed_spots: individual が % 件（期待2件）。個人NG除外デモが成立しません。', v_individuals;
+  end if;
+end$$;
 
 commit;
