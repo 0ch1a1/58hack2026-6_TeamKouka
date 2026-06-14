@@ -24,6 +24,7 @@ import { DEMO_DELIVERY_COMPANY_ID } from '../../../lib/config';
 import { colors } from '../../../lib/theme';
 import { ScreenHeader, StatusBadge, QuestStatusBar } from '../../../components/ui';
 import { StorageDeadlineBadge } from '../../../components/StorageDeadlineBadge';
+import { SupportReportForm } from '../../../components/SupportReportForm';
 
 type Package = {
   id: string;
@@ -163,6 +164,7 @@ export default function PackagesScreen() {
         <FlatList
           data={filtered}
           keyExtractor={item => item.id}
+          style={styles.list}
           contentContainerStyle={styles.listContent}
           renderItem={({ item }) => <PackageCard pkg={item} />}
           ListEmptyComponent={
@@ -231,6 +233,10 @@ export default function PackagesScreen() {
 function PackageCard({ pkg }: { pkg: Package }) {
   // クエスト風メタ（文言/アイコン/色）を生 status から解決。バッジ背景は 3 状態トーンを維持。
   const quest = questStatusMeta(pkg.rawStatus);
+  const [reportVisible, setReportVisible] = useState(false);
+  // 代理人が割り当たっていればチャット（受取人⇆代理人）導線を出す。
+  // pickup-ready（stored 限定）だけでは agent_assigned 段階で到達できないため、一覧から開けるようにする。
+  const canChat = !!pkg.agentName;
   return (
     <TouchableOpacity
       style={styles.card}
@@ -270,9 +276,24 @@ function PackageCard({ pkg }: { pkg: Package }) {
         </View>
       )}
 
+      {/* 代理人が割り当たっている荷物はチャット（受取人⇆代理人）を一覧から開ける */}
+      {canChat && (
+        <TouchableOpacity
+          style={styles.chatRow}
+          onPress={() =>
+            router.push({ pathname: '/(app)/messages/[parcelId]', params: { parcelId: pkg.id } })
+          }
+          activeOpacity={0.7}
+        >
+          <Ionicons name="chatbubbles-outline" size={14} color={colors.green} />
+          <Text style={styles.chatText}>メッセージ</Text>
+          <Ionicons name="chevron-forward" size={14} color={colors.grayLight} />
+        </TouchableOpacity>
+      )}
+
       <TouchableOpacity
         style={styles.troubleReportRow}
-        onPress={() => Alert.alert('開発中です')}
+        onPress={() => setReportVisible(true)}
         activeOpacity={0.7}
       >
         <Ionicons name="alert-circle-outline" size={14} color="#B45309" />
@@ -291,6 +312,19 @@ function PackageCard({ pkg }: { pkg: Package }) {
         <Text style={styles.auditLogText}>監査ログを検証</Text>
         <Ionicons name="chevron-forward" size={14} color={colors.grayLight} />
       </TouchableOpacity>
+
+      {/* トラブル報告モーダル（support_reports へ記録）。pickup-ready と同じ SupportReportForm を再利用 */}
+      <Modal visible={reportVisible} transparent animationType="fade" onRequestClose={() => setReportVisible(false)}>
+        <View style={styles.reportOverlay}>
+          <View style={styles.reportCard}>
+            <Text style={styles.reportTitle}>問題を報告</Text>
+            <SupportReportForm parcelId={pkg.id} onDone={() => setReportVisible(false)} />
+            <TouchableOpacity style={styles.reportClose} onPress={() => setReportVisible(false)}>
+              <Text style={styles.reportCloseText}>閉じる</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </TouchableOpacity>
   );
 }
@@ -304,7 +338,10 @@ const styles = StyleSheet.create({
   filterChipActive: { backgroundColor: colors.green, borderColor: colors.green },
   filterChipText: { fontSize: 13, fontWeight: '600', color: colors.green },
   filterChipTextActive: { color: colors.white },
-  listContent: { paddingHorizontal: 16, paddingBottom: 100, gap: 12 },
+  // flex:1 で残り高さに固定し、件数が多いとき確実にスクロールさせる。
+  // paddingBottom は最下部カードが「荷物を登録」FAB に隠れないための余白。
+  list: { flex: 1 },
+  listContent: { paddingHorizontal: 16, paddingBottom: 110, gap: 12 },
   card: { backgroundColor: colors.white, borderRadius: 16, padding: 16, gap: 8, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 8, elevation: 2 },
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   cardTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 },
@@ -314,8 +351,15 @@ const styles = StyleSheet.create({
   metaText: { fontSize: 13, color: colors.gray },
   agentRow: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: colors.greenLight, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, alignSelf: 'flex-start' },
   agentText: { fontSize: 13, fontWeight: '600', color: colors.green },
+  chatRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4, paddingTop: 8, borderTopWidth: 1, borderTopColor: colors.border },
+  chatText: { flex: 1, fontSize: 13, fontWeight: '600', color: colors.green },
   troubleReportRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4, paddingTop: 8, borderTopWidth: 1, borderTopColor: colors.border },
   troubleReportText: { flex: 1, fontSize: 13, fontWeight: '600', color: '#B45309' },
+  reportOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', padding: 24 },
+  reportCard: { backgroundColor: colors.white, borderRadius: 20, padding: 20, gap: 12 },
+  reportTitle: { fontSize: 18, fontWeight: '700', color: colors.ink },
+  reportClose: { alignItems: 'center', paddingVertical: 10 },
+  reportCloseText: { fontSize: 15, fontWeight: '600', color: colors.gray },
   auditLogRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4, paddingTop: 8, borderTopWidth: 1, borderTopColor: colors.border },
   auditLogText: { flex: 1, fontSize: 13, fontWeight: '600', color: colors.green },
   emptyContainer: { alignItems: 'center', paddingTop: 60, gap: 12 },
