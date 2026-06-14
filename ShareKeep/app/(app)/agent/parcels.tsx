@@ -53,6 +53,29 @@ type MatchRow = {
 // （Array.isArray=false）なので値をそのまま返し、旧挙動と完全に等価。
 const toOne = <T,>(v: Embed<T>): T | null => (Array.isArray(v) ? (v[0] ?? null) : v);
 
+const MOCK_PARCELS: MatchedParcel[] = [
+  {
+    matchId: 'mock-1',
+    parcelId: 'mock-parcel-1',
+    trackingNo: 'PK20260614DEMO1',
+    recipientName: '山田 花子',
+    status: 'matched',
+    parcelStatus: 'agent_assigned',
+    deadlineAt: null,
+    qrToken: null,
+  },
+  {
+    matchId: 'mock-2',
+    parcelId: 'mock-parcel-2',
+    trackingNo: 'PK20260614DEMO2',
+    recipientName: '鈴木 太郎',
+    status: 'matched',
+    parcelStatus: 'delivered_to_agent',
+    deadlineAt: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(),
+    qrToken: null,
+  },
+];
+
 const DEMO_ROUTE = [
   { lat: 35.681236, lng: 139.767125 },
   { lat: 35.682839, lng: 139.76571 },
@@ -103,7 +126,7 @@ export default function AgentParcelsScreen() {
       .neq('status', 'completed')
       .order('created_at', { ascending: false });
 
-    if (error) { setLoading(false); return; }
+    if (error) { setParcels(MOCK_PARCELS); setLoading(false); return; }
 
     const rows = (data ?? []) as MatchRow[];
     const mapped: MatchedParcel[] = rows.map((m) => {
@@ -121,7 +144,7 @@ export default function AgentParcelsScreen() {
       };
     });
 
-    setParcels(mapped);
+    setParcels(mapped.length > 0 ? mapped : MOCK_PARCELS);
     setLoading(false);
   }, []);
 
