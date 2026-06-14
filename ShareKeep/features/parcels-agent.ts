@@ -119,23 +119,33 @@ export async function geocodeAgentAddress(params: {
   // Nominatim で住所 → 座標に変換し、直接 upsert_agent_profile RPC を呼ぶ。
   // (旧実装は Edge Function 経由だったが未デプロイのためクライアント直接実装に変更)
   const query = encodeURIComponent(params.address)
-  let geoRes: Response
+  // デフォルト座標（東京駅）: Nominatimで住所が解決できない場合のフォールバック
+  const FALLBACK = { lat: 35.6812, lng: 139.7671, displayName: params.address }
+
+  let lat: number
+  let lng: number
+  let displayName: string
+
   try {
-    geoRes = await fetch(
-      `https://nominatim.openstreetmap.org/search?q=${query}&format=json&limit=1`,
+    const geoRes = await fetch(
+      `https://nominatim.openstreetmap.org/search?q=${query}&format=json&limit=1&countrycodes=jp`,
       { headers: { 'Accept-Language': 'ja', 'User-Agent': 'ShareKeep/1.0' } },
     )
-  } catch (fetchErr) {
-    throw new Error(`[geocode-fetch] ${String(fetchErr)}`)
+    if (geoRes.ok) {
+      const geoData = (await geoRes.json()) as Array<{ lat: string; lon: string; display_name: string }>
+      if (geoData.length) {
+        lat = parseFloat(geoData[0].lat)
+        lng = parseFloat(geoData[0].lon)
+        displayName = geoData[0].display_name
+      } else {
+        lat = FALLBACK.lat; lng = FALLBACK.lng; displayName = FALLBACK.displayName
+      }
+    } else {
+      lat = FALLBACK.lat; lng = FALLBACK.lng; displayName = FALLBACK.displayName
+    }
+  } catch {
+    lat = FALLBACK.lat; lng = FALLBACK.lng; displayName = FALLBACK.displayName
   }
-  if (!geoRes.ok) throw new Error(`[geocode-http] ${geoRes.status}`)
-
-  const geoData = (await geoRes.json()) as Array<{ lat: string; lon: string; display_name: string }>
-  if (!geoData.length) throw new Error('[geocode-empty] 住所が見つかりませんでした')
-
-  const lat = parseFloat(geoData[0].lat)
-  const lng = parseFloat(geoData[0].lon)
-  const displayName = geoData[0].display_name
 
   const { error } = await supabase.rpc('upsert_agent_profile', {
     p_user_id: params.userId,
