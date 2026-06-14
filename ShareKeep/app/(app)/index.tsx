@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView, ActivityIndicator, Alert } from 'react-native';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView, ActivityIndicator, Alert, PanResponder } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import TreeScene from '../../components/TreeScene';
@@ -49,7 +49,22 @@ export default function HomeScreen() {
   // TODO: Supabase から取得した xp・points に差し替え
   const xp = 0;
   const points = 0;
-  const stage = xpToStage(xp);
+  const xpStage = xpToStage(xp);
+  // デモ用にステージを手動選択可能にする（XP連動時は xpStage のみ使う）
+  const [stage, setStage] = useState(xpStage);
+
+  // 3Dモデル回転制御
+  const rotationRef = useRef(0);
+  const invalidateRef = useRef<() => void>(() => {});
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onPanResponderMove: (_, gesture) => {
+        rotationRef.current += gesture.dx * 0.008;
+        invalidateRef.current();
+      },
+    }),
+  ).current;
 
   const handleSignOut = useCallback(async () => {
     try {
@@ -89,9 +104,26 @@ export default function HomeScreen() {
       {/* 木のステージラベル */}
       <Text style={styles.stageLabel}>{STAGE_LABELS[stage]}</Text>
 
-      {/* 3D木ビジュアル */}
-      <View style={styles.treeContainer}>
-        <TreeScene stage={stage} />
+      {/* 3D木ビジュアル（ドラッグで回転） */}
+      <View style={styles.treeContainer} {...panResponder.panHandlers}>
+        <TreeScene
+          stage={stage}
+          rotationRef={rotationRef}
+          onInvalidate={(fn) => { invalidateRef.current = fn; }}
+        />
+      </View>
+
+      {/* デモ用ステージ選択 */}
+      <View style={styles.stageSelectorRow}>
+        {[0, 1, 2, 3, 4].map((s) => (
+          <TouchableOpacity
+            key={s}
+            style={[styles.stageDot, stage === s && styles.stageDotActive]}
+            onPress={() => setStage(s)}
+          >
+            <Text style={[styles.stageDotText, stage === s && styles.stageDotTextActive]}>{s}</Text>
+          </TouchableOpacity>
+        ))}
       </View>
 
       {/* モード切り替えタブ */}
@@ -242,6 +274,32 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     overflow: 'hidden',
     backgroundColor: colors.greenPale,
+  },
+  stageSelectorRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: 6,
+    marginBottom: 2,
+  },
+  stageDot: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.greenLight,
+  },
+  stageDotActive: {
+    backgroundColor: colors.green,
+  },
+  stageDotText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.green,
+  },
+  stageDotTextActive: {
+    color: '#FFFFFF',
   },
   tabBar: {
     flexDirection: 'row',
