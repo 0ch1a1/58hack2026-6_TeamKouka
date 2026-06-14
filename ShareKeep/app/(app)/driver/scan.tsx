@@ -268,7 +268,7 @@ export default function DriverScanScreen() {
               style={styles.chatButton}
             />
           )}
-          <PrimaryButton label="一覧に戻る" icon="arrow-back" onPress={() => router.back()} style={parcelId && isValidUuid(parcelId) ? styles.secondaryButton : undefined} />
+          <PrimaryButton label="荷物配達一覧へ" icon="list" onPress={() => router.replace('/(app)/driver')} style={parcelId && isValidUuid(parcelId) ? styles.secondaryButton : undefined} />
         </View>
       )}
 
@@ -285,7 +285,7 @@ export default function DriverScanScreen() {
             </Text>
           </Card>
           <PrimaryButton label="もう一度読み取る" icon="scan" onPress={resetScan} />
-          <PrimaryButton label="一覧に戻る" icon="arrow-back" onPress={() => router.back()} style={styles.secondaryButton} />
+          <PrimaryButton label="荷物配達一覧へ" icon="list" onPress={() => router.replace('/(app)/driver')} style={styles.secondaryButton} />
         </View>
       )}
 
