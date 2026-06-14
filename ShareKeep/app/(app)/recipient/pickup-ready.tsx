@@ -16,6 +16,7 @@ import { supabase, getDeliveryMatch } from '../../../lib/supabase';
 import { generateQrToken, subscribeParcel, fetchParcel } from '../../../features/parcels';
 import { fetchDeliveryLocation, subscribeDeliveryLocation } from '../../../features/tracking';
 import { isHandedOff } from '../../../lib/status';
+import { isMockParcelId, MOCK_PARCEL_INFO, buildMockQrToken } from '../../../lib/mockDemo';
 import { colors, radius } from '../../../lib/theme';
 import type { DeliveryLocation } from '../../../lib/database.types';
 import { ScreenHeader, PrimaryButton, Card, InfoRow } from '../../../components/ui';
@@ -58,6 +59,19 @@ export default function PickupReadyScreen() {
     if (!parcelId) { setLoading(false); return; }
 
     const fetchData = async () => {
+      // モック荷物はDBに実データが存在しないため静的情報で代替
+      if (isMockParcelId(parcelId)) {
+        const mock = MOCK_PARCEL_INFO[parcelId];
+        if (mock) {
+          setTrackingNo(mock.trackingNo);
+          setDeadlineAt(mock.deadlineAt);
+          setAgent({ name: mock.agentName, address: mock.agentAddress, floor: mock.agentFloor });
+          setQrToken(buildMockQrToken(mock.trackingNo));
+        }
+        setLoading(false);
+        return;
+      }
+
       // 代理人(JOIN) / 追跡番号は parcelId だけで引けて互いに独立なので並列取得
       const [
         { data: match, error: matchError },
@@ -90,8 +104,13 @@ export default function PickupReadyScreen() {
         setQrToken(parcelId);
       }
 
-      if (matchError || !match) {
-        Alert.alert('エラー', '代理人情報の取得に失敗しました。');
+      if (matchError) {
+        // RLS またはネットワークエラー。代理人情報なしで続行（QR 表示は可能）。
+        setLoading(false);
+        return;
+      }
+      if (!match) {
+        // マッチがまだ存在しない（代理人未割り当て）。
         setLoading(false);
         return;
       }

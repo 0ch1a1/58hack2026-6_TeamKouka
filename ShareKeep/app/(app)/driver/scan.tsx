@@ -6,8 +6,13 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import { colors, spacing, radius } from '../../../lib/theme';
 import { ScreenHeader, Card, PrimaryButton } from '../../../components/ui';
 import { verifyAgentQr, fetchParcel, updateParcelStatus } from '../../../features/parcels';
+import { sendMessage } from '../../../features/messages';
 import { isDemoQrToken } from '../../../lib/mockDemo';
 import { logError } from '../../../lib/logger';
+
+function isValidUuid(s: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s);
+}
 
 // 代理人QR読み取り（配達員向け）。
 // 代理人が提示する agent QR をカメラで読み、verifyAgentQr で荷物を
@@ -100,6 +105,11 @@ export default function DriverScanScreen() {
           } catch {
             setStatusConfirmed(null);
           }
+          if (isValidUuid(parcelId)) {
+            try {
+              await sendMessage(parcelId, '配達員から代理人に荷物が受け渡されました。代理人の方よりご連絡をお待ちください。');
+            } catch { /* 自動メッセージ失敗は無視 */ }
+          }
         } else {
           setStatusConfirmed(null);
         }
@@ -126,21 +136,23 @@ export default function DriverScanScreen() {
           parcel = await fetchParcel(parcelId);
         } catch (error) {
           logError('driver/scan:fetchParcel', error);
-          // 整合確認の失敗（RLS で読めない等）は致命的ではない。verify は成功しているため
-          // 完了扱いにし、確認は不明（null）のままにする。
           setStatusConfirmed(null);
+          if (isValidUuid(parcelId)) {
+            try { await sendMessage(parcelId, '配達員から代理人に荷物が受け渡されました。代理人の方よりご連絡をお待ちください。'); } catch { /* 無視 */ }
+          }
           setPhase('done');
           return;
         }
         if (parcel === null) {
-          // 読めなかった（権限/未存在）→ 確認不能。verify 成功なので soft 完了。
           setStatusConfirmed(null);
           setPhase('done');
         } else if (parcel.status === 'delivered_to_agent') {
           setStatusConfirmed(true);
+          if (isValidUuid(parcelId)) {
+            try { await sendMessage(parcelId, '配達員から代理人に荷物が受け渡されました。代理人の方よりご連絡をお待ちください。'); } catch { /* 無視 */ }
+          }
           setPhase('done');
         } else {
-          // 読めたが status が想定外 → 選択中の荷物とは別のQRを読んだ可能性。警告。
           setStatusConfirmed(false);
           setPhase('mismatch');
         }
@@ -248,7 +260,15 @@ export default function DriverScanScreen() {
               </View>
             )}
           </Card>
-          <PrimaryButton label="完了して戻る" icon="arrow-back" onPress={() => router.back()} />
+          {parcelId && isValidUuid(parcelId) && (
+            <PrimaryButton
+              label="チャットを確認する"
+              icon="chatbubbles-outline"
+              onPress={() => router.replace({ pathname: '/(app)/messages/[parcelId]', params: { parcelId } })}
+              style={styles.chatButton}
+            />
+          )}
+          <PrimaryButton label="一覧に戻る" icon="arrow-back" onPress={() => router.back()} style={parcelId && isValidUuid(parcelId) ? styles.secondaryButton : undefined} />
         </View>
       )}
 
@@ -331,6 +351,7 @@ const styles = StyleSheet.create({
   resultTitle: { fontSize: 17, fontWeight: '700', color: colors.green },
   errorTitle: { fontSize: 17, fontWeight: '700', color: '#DC2626' },
   warnTitle: { fontSize: 17, fontWeight: '700', color: '#D97706' },
+  chatButton: { backgroundColor: colors.green },
   secondaryButton: { backgroundColor: colors.grayLight },
   resultSub: { fontSize: 14, color: colors.gray, marginTop: spacing.sm, lineHeight: 20 },
   confirmRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginTop: spacing.md },

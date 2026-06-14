@@ -34,6 +34,6 @@ export const getDeliveryMatch = async (parcelId: string) => {
     .from('delivery_matches')
     .select('*, profiles!agent_id(full_name, phone)')
     .eq('parcel_id', parcelId)
-    .single();
+    .maybeSingle();
   return { data, error };
 };

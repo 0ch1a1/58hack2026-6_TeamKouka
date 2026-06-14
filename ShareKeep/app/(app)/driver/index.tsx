@@ -18,6 +18,7 @@ import {
   fetchDriverParcels,
   startDelivery,
   reportDeliveryFailed,
+  updateParcelStatus,
   type DriverParcel,
 } from '../../../features/parcels';
 import { DRIVER_STATUS_LABEL, driverActionsFor, type DriverAction } from '../../../lib/status';
@@ -170,49 +171,93 @@ export default function DriverHomeScreen() {
           </TouchableOpacity>
         </View>
       ) : (
-        <FlatList
-          data={parcels}
-          keyExtractor={item => item.id}
-          contentContainerStyle={styles.listContent}
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.driver} />
-          }
-          renderItem={({ item }) => {
-            const actions = driverActionsFor(item.status);
-            const label = DRIVER_STATUS_LABEL[item.status as ParcelStatus] ?? String(item.status);
-            const isBusy = busyId === item.id;
-            return (
-              <Card>
-                <View style={styles.cardHeader}>
-                  <View style={styles.cardTitleRow}>
-                    <Ionicons name="cube-outline" size={16} color={colors.driver} />
-                    <Text style={styles.cardTitle}>{item.tracking_no}</Text>
+        <>
+          <FlatList
+            data={parcels.filter(p => p.status !== 'delivered_to_agent')}
+            keyExtractor={item => item.id}
+            contentContainerStyle={styles.listContent}
+            refreshControl={
+              <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.driver} />
+            }
+            renderItem={({ item }) => {
+              const actions = driverActionsFor(item.status);
+              const label = DRIVER_STATUS_LABEL[item.status as ParcelStatus] ?? String(item.status);
+              const isBusy = busyId === item.id;
+              return (
+                <Card>
+                  <View style={styles.cardHeader}>
+                    <View style={styles.cardTitleRow}>
+                      <Ionicons name="cube-outline" size={16} color={colors.driver} />
+                      <Text style={styles.cardTitle}>{item.tracking_no}</Text>
+                    </View>
+                    <StatusBadge label={label} color={colors.driver} bg="#E5E7EB" />
                   </View>
-                  <StatusBadge label={label} color={colors.driver} bg="#E5E7EB" />
-                </View>
 
-                <InfoRow label="受取人" value={item.recipient?.full_name ?? '—'} />
+                  <InfoRow label="受取人" value={item.recipient?.full_name ?? '—'} />
 
-                {/* クエスト風の進捗ステップ（表示のみ。バッジは配達員向けの正確な status を維持）。 */}
-                <QuestStatusBar status={item.status} />
+                  {/* クエスト風の進捗ステップ（表示のみ。バッジは配達員向けの正確な status を維持）。 */}
+                  <QuestStatusBar status={item.status} />
 
-                {actions.length > 0 && (
-                  <View style={styles.actionRow}>
-                    {actions.map(action => (
-                      <ActionButton
-                        key={action}
-                        action={action}
-                        busy={isBusy}
-                        onPress={() => handleAction(action, item)}
-                      />
-                    ))}
-                  </View>
-                )}
-              </Card>
-            );
-          }}
-          ListEmptyComponent={<EmptyState icon="cube-outline" message="担当の荷物はありません" />}
-        />
+                  {actions.length > 0 && (
+                    <View style={styles.actionRow}>
+                      {actions.map(action => (
+                        <ActionButton
+                          key={action}
+                          action={action}
+                          busy={isBusy}
+                          onPress={() => handleAction(action, item)}
+                        />
+                      ))}
+                    </View>
+                  )}
+                </Card>
+              );
+            }}
+            ListEmptyComponent={<EmptyState icon="cube-outline" message="担当の荷物はありません" />}
+          />
+
+          {/* デモ用: 受け渡し済み荷物を agent_assigned に戻して再スキャンできるようにする */}
+          {parcels.some(p => p.status === 'delivered_to_agent') && (
+            <View style={styles.demoSection}>
+              <Text style={styles.demoSectionLabel}>デモ操作</Text>
+              {parcels
+                .filter(p => p.status === 'delivered_to_agent')
+                .map(item => {
+                  const isBusy = busyId === item.id;
+                  return (
+                    <TouchableOpacity
+                      key={item.id}
+                      style={[styles.demoResetButton, isBusy && styles.demoResetButtonDisabled]}
+                      disabled={isBusy}
+                      onPress={async () => {
+                        if (inFlightRef.current) return;
+                        inFlightRef.current = true;
+                        setBusyId(item.id);
+                        try {
+                          await updateParcelStatus(item.id, 'agent_assigned');
+                          await load();
+                        } catch {
+                          Alert.alert('エラー', 'デモリセットに失敗しました。');
+                        } finally {
+                          if (mountedRef.current) setBusyId(null);
+                          inFlightRef.current = false;
+                        }
+                      }}
+                    >
+                      {isBusy ? (
+                        <ActivityIndicator size="small" color={colors.driver} />
+                      ) : (
+                        <>
+                          <Ionicons name="refresh-outline" size={14} color={colors.driver} />
+                          <Text style={styles.demoResetText}>{item.tracking_no} を再スキャン可能に戻す</Text>
+                        </>
+                      )}
+                    </TouchableOpacity>
+                  );
+                })}
+            </View>
+          )}
+        </>
       )}
     </SafeAreaView>
   );
@@ -301,4 +346,25 @@ const styles = StyleSheet.create({
   },
   actionButtonDisabled: { opacity: 0.6 },
   actionButtonText: { fontSize: 13, fontWeight: '600', color: colors.white },
+  demoSection: {
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    gap: spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
+  },
+  demoSectionLabel: { fontSize: 11, fontWeight: '600', color: colors.grayLight, letterSpacing: 0.5 },
+  demoResetButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    paddingVertical: 10,
+    borderRadius: radius.button,
+    borderWidth: 1,
+    borderColor: colors.driver,
+    borderStyle: 'dashed',
+  },
+  demoResetButtonDisabled: { opacity: 0.5 },
+  demoResetText: { fontSize: 13, fontWeight: '600', color: colors.driver },
 });

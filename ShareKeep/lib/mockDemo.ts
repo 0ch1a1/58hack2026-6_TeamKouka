@@ -18,3 +18,27 @@ export function buildMockQrToken(trackingNo: string): string {
 export function isDemoQrToken(token: string): boolean {
   return token.startsWith('DEMO:');
 }
+
+/** モック荷物の静的情報（受取人画面でのデモ表示用） */
+export const MOCK_PARCEL_INFO: Record<string, {
+  trackingNo: string;
+  agentName: string;
+  agentAddress: string;
+  agentFloor: string;
+  deadlineAt: string;
+}> = {
+  'mock-parcel-1': {
+    trackingNo: 'PK20260614DEMO1',
+    agentName: '田中 一郎',
+    agentAddress: '東京都渋谷区神宮前1-1-1',
+    agentFloor: '203号室',
+    deadlineAt: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(),
+  },
+  'mock-parcel-2': {
+    trackingNo: 'PK20260614DEMO2',
+    agentName: '田中 一郎',
+    agentAddress: '東京都渋谷区神宮前1-1-1',
+    agentFloor: '203号室',
+    deadlineAt: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString(),
+  },
+};
