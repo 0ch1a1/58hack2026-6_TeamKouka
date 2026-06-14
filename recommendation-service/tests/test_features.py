@@ -215,3 +215,10 @@ def test_spot_type_score_in_build_features():
     # spot_type 未取得でも壊れず既定値 0.6。
     features = build_features({"distance_meters": 100}, _now(12))
     assert features["spot_type_score"] == pytest.approx(0.6)
+
+
+def test_build_features_keys_match_feature_names_exactly():
+    # 中間特徴量の並び替え/欠落も検知する厳密な lockstep ガード。
+    # (末尾2件だけでなく、出力キーの集合と順序が FEATURE_NAMES と完全一致すること)
+    features = build_features({"distance_meters": 100, "spot_type": "store"}, _now(12))
+    assert list(features.keys()) == FEATURE_NAMES

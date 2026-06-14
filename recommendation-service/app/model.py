@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -10,6 +11,8 @@ import numpy as np
 from app.config import FALLBACK_SCORE_BIAS, FALLBACK_SCORE_SCALE
 from app.features import FEATURE_NAMES, features_to_row
 from app.utils import sigmoid
+
+logger = logging.getLogger(__name__)
 
 
 FALLBACK_WEIGHTS = {
@@ -69,9 +72,19 @@ class RecommendationModel:
         artifact = joblib.load(self.model_path)
         feature_names = artifact.get("feature_names") or artifact.get("features")
         if feature_names != FEATURE_NAMES:
-            raise ValueError(
-                f"Model feature order mismatch: expected {FEATURE_NAMES}, got {feature_names}"
+            # 特徴量セット不一致(例: 再学習前の旧 artifact)は致命にせず fallback へ降格する。
+            # main.py が import 時にモデルを生成するため、ここで raise するとサービス全体が
+            # 起動不能になる。可用性要件(推薦が落ちたらルールベースへ)に従い警告のみ出す。
+            logger.warning(
+                "Model feature mismatch; falling back to rules. expected=%s got=%s",
+                FEATURE_NAMES,
+                feature_names,
             )
+            self.artifact = None
+            self.feature_names = FEATURE_NAMES
+            self.version = "fallback-rules-v1"
+            self.is_fallback = True
+            return
         self.artifact = artifact
         self.feature_names = feature_names
         self.version = artifact.get("version", "model-unknown")

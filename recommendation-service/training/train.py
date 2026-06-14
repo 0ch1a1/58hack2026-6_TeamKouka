@@ -46,6 +46,12 @@ def _label_from_log(row: dict[str, Any]) -> int | None:
     return 1 if bool(chosen) else 0
 
 
+# 後から追加した特徴量が、PR以前に保存された recommendation_logs.features に無い場合の
+# 中立補完値。これが無いと旧ログが全件 continue され、新ログが溜まるまで --from-logs 再学習が
+# 「20件未満」で失敗し、実ログ学習の継続性が切れる。新特徴量を足すたびにここへ既定値を追加する。
+LOG_BACKFILL_DEFAULTS = {"spot_type_score": 0.6}
+
+
 def dataframe_from_logs() -> pd.DataFrame:
     from app.supabase_client import SupabaseGateway
 
@@ -57,11 +63,13 @@ def dataframe_from_logs() -> pd.DataFrame:
         label = _label_from_log(row)
         if label is None:
             continue
-        if not all(name in features for name in FEATURE_NAMES):
+        # 新特徴量だけ欠ける旧ログは中立値で補完して残す。他特徴量が欠ける不正ログは除外。
+        filled = {**LOG_BACKFILL_DEFAULTS, **features}
+        if not all(name in filled for name in FEATURE_NAMES):
             continue
         records.append(
             {
-                **{name: float(features[name]) for name in FEATURE_NAMES},
+                **{name: float(filled[name]) for name in FEATURE_NAMES},
                 "label": label,
             }
         )
