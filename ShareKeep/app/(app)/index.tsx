@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView, ActivityIndicator, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
@@ -8,7 +8,7 @@ import { XP_LEVEL_THRESHOLDS } from '../../lib/constants';
 import { Card } from '../../components/ui';
 import { RegionalContributionCard } from '../../components/RegionalContributionCard';
 import { NotificationBell } from '../../components/NotificationBell';
-import { getMyRole } from '../../features/auth';
+import { getMyRole, signOut } from '../../features/auth';
 
 type Mode = 'recipient' | 'agent';
 
@@ -51,6 +51,14 @@ export default function HomeScreen() {
   const points = 0;
   const stage = xpToStage(xp);
 
+  const handleSignOut = useCallback(async () => {
+    try {
+      await signOut();
+    } catch {
+      Alert.alert('エラー', 'ログアウトに失敗しました。');
+    }
+  }, []);
+
   if (!roleChecked) {
     return (
       <SafeAreaView style={[styles.safe, styles.loading]}>
@@ -72,6 +80,9 @@ export default function HomeScreen() {
           <Text style={styles.statDivider}>|</Text>
           <Text style={styles.statText}>P {points}</Text>
           <NotificationBell color={colors.green} />
+          <TouchableOpacity onPress={handleSignOut} style={styles.signOutButton} accessibilityLabel="ログアウト">
+            <Ionicons name="log-out-outline" size={20} color={colors.gray} />
+          </TouchableOpacity>
         </View>
       </View>
 
@@ -216,6 +227,7 @@ const styles = StyleSheet.create({
   statDivider: {
     color: '#A7F3D0',
   },
+  signOutButton: { padding: 4 },
   stageLabel: {
     textAlign: 'center',
     fontSize: 14,
