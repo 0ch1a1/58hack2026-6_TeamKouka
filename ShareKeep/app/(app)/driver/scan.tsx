@@ -5,7 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { colors, spacing, radius } from '../../../lib/theme';
 import { ScreenHeader, Card, PrimaryButton } from '../../../components/ui';
-import { verifyAgentQr, fetchParcel } from '../../../features/parcels';
+import { verifyAgentQr, fetchParcel, updateParcelStatus } from '../../../features/parcels';
 import { isDemoQrToken } from '../../../lib/mockDemo';
 import { logError } from '../../../lib/logger';
 
@@ -91,9 +91,18 @@ export default function DriverScanScreen() {
       setPhase('verifying');
       setErrorMsg(null);
 
-      // デモ用QRトークンはEdge Functionを呼ばず成功扱いにする
+      // デモ用QRトークン: 実荷物のステータスを delivered_to_agent に遷移させてから完了表示
       if (isDemoQrToken(data)) {
-        setStatusConfirmed(null);
+        if (parcelId) {
+          try {
+            await updateParcelStatus(parcelId, 'delivered_to_agent');
+            setStatusConfirmed(true);
+          } catch {
+            setStatusConfirmed(null);
+          }
+        } else {
+          setStatusConfirmed(null);
+        }
         setPhase('done');
         return;
       }
