@@ -255,6 +255,15 @@ function PackageCard({ pkg }: { pkg: Package }) {
         </View>
       )}
 
+      <TouchableOpacity
+        style={styles.troubleReportRow}
+        onPress={() => Alert.alert('開発中です')}
+        activeOpacity={0.7}
+      >
+        <Ionicons name="alert-circle-outline" size={14} color="#B45309" />
+        <Text style={styles.troubleReportText}>トラブル報告</Text>
+      </TouchableOpacity>
+
       {/* 機能9: 追記専用監査ログの検証画面への導線 */}
       <TouchableOpacity
         style={styles.auditLogRow}
@@ -290,6 +299,8 @@ const styles = StyleSheet.create({
   metaText: { fontSize: 13, color: colors.gray },
   agentRow: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: colors.greenLight, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, alignSelf: 'flex-start' },
   agentText: { fontSize: 13, fontWeight: '600', color: colors.green },
+  troubleReportRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4, paddingTop: 8, borderTopWidth: 1, borderTopColor: colors.border },
+  troubleReportText: { flex: 1, fontSize: 13, fontWeight: '600', color: '#B45309' },
   auditLogRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4, paddingTop: 8, borderTopWidth: 1, borderTopColor: colors.border },
   auditLogText: { flex: 1, fontSize: 13, fontWeight: '600', color: colors.green },
   emptyContainer: { alignItems: 'center', paddingTop: 60, gap: 12 },
