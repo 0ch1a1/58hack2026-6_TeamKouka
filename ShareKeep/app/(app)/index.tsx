@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView, ActivityIndicator } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView, ActivityIndicator, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import TreeScene from '../../components/TreeScene';
@@ -108,6 +108,17 @@ export default function HomeScreen() {
       {/* 地域貢献カード（機能③・全体集計） */}
       <View style={styles.regionalWrap}>
         <RegionalContributionCard />
+      </View>
+
+      <View style={styles.pointExchangeWrap}>
+        <TouchableOpacity
+          style={styles.pointExchangeButton}
+          onPress={() => Alert.alert('開発中です')}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="gift-outline" size={16} color={colors.green} />
+          <Text style={styles.pointExchangeText}>ポイントを交換する</Text>
+        </TouchableOpacity>
       </View>
 
       {/* モード別コンテンツ（後続タスクで各画面へ遷移） */}
@@ -248,6 +259,26 @@ const styles = StyleSheet.create({
   regionalWrap: {
     paddingHorizontal: 16,
     paddingBottom: 12,
+  },
+  pointExchangeWrap: {
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+  },
+  pointExchangeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: colors.white,
+    borderWidth: 1.5,
+    borderColor: colors.green,
+    borderRadius: 12,
+    paddingVertical: 12,
+  },
+  pointExchangeText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: colors.green,
   },
   modeContent: {
     paddingHorizontal: 16,
