@@ -21,7 +21,6 @@ import { questStatusMeta } from '../../../lib/status';
 import { StorageDeadlineBadge } from '../../../components/StorageDeadlineBadge';
 import { SupportReportForm } from '../../../components/SupportReportForm';
 import { generateQrToken, verifyRecipientQr, updateParcelStatus } from '../../../features/parcels';
-import { isMockParcelId, buildMockQrToken } from '../../../lib/mockDemo';
 import { fetchDeliveryLocation, upsertDeliveryLocation } from '../../../features/tracking';
 
 type MatchedParcel = {
@@ -53,29 +52,6 @@ type MatchRow = {
 // to-one 埋め込みが配列推論された場合に先頭要素を取り出す。実行時は単一オブジェクト
 // （Array.isArray=false）なので値をそのまま返し、旧挙動と完全に等価。
 const toOne = <T,>(v: Embed<T>): T | null => (Array.isArray(v) ? (v[0] ?? null) : v);
-
-const MOCK_PARCELS: MatchedParcel[] = [
-  {
-    matchId: 'mock-1',
-    parcelId: 'mock-parcel-1',
-    trackingNo: 'PK20260614DEMO1',
-    recipientName: '山田 花子',
-    status: 'matched',
-    parcelStatus: 'agent_assigned',
-    deadlineAt: null,
-    qrToken: null,
-  },
-  {
-    matchId: 'mock-2',
-    parcelId: 'mock-parcel-2',
-    trackingNo: 'PK20260614DEMO2',
-    recipientName: '鈴木 太郎',
-    status: 'matched',
-    parcelStatus: 'delivered_to_agent',
-    deadlineAt: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(),
-    qrToken: null,
-  },
-];
 
 const DEMO_ROUTE = [
   { lat: 35.681236, lng: 139.767125 },
@@ -127,7 +103,7 @@ export default function AgentParcelsScreen() {
       .neq('status', 'completed')
       .order('created_at', { ascending: false });
 
-    if (error) { setParcels(MOCK_PARCELS); setLoading(false); return; }
+    if (error) { setParcels([]); setLoading(false); return; }
 
     const rows = (data ?? []) as MatchRow[];
     const mapped: MatchedParcel[] = rows.map((m) => {
@@ -145,7 +121,7 @@ export default function AgentParcelsScreen() {
       };
     });
 
-    setParcels(mapped.length > 0 ? mapped : MOCK_PARCELS);
+    setParcels(mapped);
     setLoading(false);
   }, []);
 
@@ -163,11 +139,6 @@ export default function AgentParcelsScreen() {
   }, [fetchParcels]);
 
   const handleShowQR = async (parcel: MatchedParcel) => {
-    if (isMockParcelId(parcel.parcelId)) {
-      setQrParcel({ ...parcel, qrToken: buildMockQrToken(parcel.trackingNo) });
-      return;
-    }
-
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
       Alert.alert('エラー', 'ユーザー情報を取得できませんでした。');
@@ -192,15 +163,6 @@ export default function AgentParcelsScreen() {
   // 受取人側 matching の subscribeParcel が発火し pickup-ready へ進む。副作用（ポイント/CO2）は
   // 後段の verifyRecipientQr で付くため、ここで updateParcelStatus を使っても報酬計算は壊れない（A0 確認済み）。
   const handleReceive = async (parcel: MatchedParcel) => {
-    if (isMockParcelId(parcel.parcelId)) {
-      setParcels((prev) => prev.map((p) =>
-        p.parcelId === parcel.parcelId
-          ? { ...p, parcelStatus: 'delivered_to_agent', deadlineAt: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString() }
-          : p,
-      ));
-      Alert.alert('受領しました', '荷物を保管中にしました。受取人が受け取りに来られます。');
-      return;
-    }
     try {
       await updateParcelStatus(parcel.parcelId, 'delivered_to_agent');
       await fetchParcels();
@@ -246,10 +208,6 @@ export default function AgentParcelsScreen() {
   };
 
   const handleAdvanceTracking = async (parcel: MatchedParcel) => {
-    if (isMockParcelId(parcel.parcelId)) {
-      setDemoProgress((prev) => ({ ...prev, [parcel.parcelId]: nextDemoProgress(prev[parcel.parcelId]) }));
-      return;
-    }
     setTrackingBusyParcelId(parcel.parcelId);
     try {
       const currentLocation = await fetchDeliveryLocation(parcel.parcelId);
