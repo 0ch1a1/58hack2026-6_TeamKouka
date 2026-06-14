@@ -51,7 +51,7 @@ export default function AgentProfileScreen() {
       // プレースホルダ頭文字用に表示名を取得（任意）。失敗は無視。
       const { data: profile } = await supabase
         .from('profiles')
-        .select('full_name')
+        .select('full_name, phone')
         .eq('id', user.id)
         .maybeSingle();
       setAvatarName(profile?.full_name ?? null);
@@ -72,6 +72,7 @@ export default function AgentProfileScreen() {
         setTimeFrom(data.start_time?.slice(0, 5) ?? '');
         setTimeTo(data.end_time?.slice(0, 5) ?? '');
       }
+      setEmergencyContact(profile?.phone ?? '');
       setLoading(false);
     };
 
