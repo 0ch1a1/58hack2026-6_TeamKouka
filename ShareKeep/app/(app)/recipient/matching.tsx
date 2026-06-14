@@ -11,7 +11,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams } from 'expo-router';
 import { colors } from '../../../lib/theme';
 import { ScreenHeader, Card, PrimaryButton } from '../../../components/ui';
-import { type RecommendedAgent } from '../../../features/recommend';
+import { type RecommendedAgent, type ExcludedAgent, type SpotType } from '../../../features/recommend';
 import { useMatchingLogic } from './useMatchingLogic';
 import { LoadingDots } from './LoadingDots';
 // 機能④⑤: スコア内訳バーへの集約とプライバシー段階開示の表示ユーティリティ（AgentCard で使用）。
@@ -30,13 +30,33 @@ const FACTOR_BARS: { key: keyof ScoreFactors; label: string }[] = [
   { key: 'reliability', label: '実績' },
 ];
 
+// 受け渡し先スポット種別 → 日本語ラベル。旧 API で spot_type が欠落した場合は null（バッジ非表示）。
+const SPOT_TYPE_LABELS: Record<SpotType, string> = {
+  store: '店舗',
+  facility: '施設',
+  manager_room: '管理人室',
+  individual: '個人',
+};
+
+function spotTypeLabel(spotType: SpotType | undefined): string | null {
+  if (!spotType) return null;
+  return SPOT_TYPE_LABELS[spotType] ?? null;
+}
+
+// 距離（メートル）を「150m」「1.2km」形式に整形。カードと除外セクションで共用。
+function formatDistance(meters: number): string {
+  return meters >= 1000
+    ? `${(meters / 1000).toFixed(1)}km`
+    : `${Math.round(meters)}m`;
+}
+
 export default function MatchingScreen() {
   const { parcelId, trackingNumber } = useLocalSearchParams<{
     parcelId: string;
     trackingNumber: string;
   }>();
 
-  const { mode, candidates, selectedId, assigning, selectAgent, confirmSelection } =
+  const { mode, candidates, excluded, selectedId, assigning, selectAgent, confirmSelection } =
     useMatchingLogic(parcelId);
 
   // ===== 選択 UI（推薦サービスが候補を返したとき）=====
@@ -44,6 +64,7 @@ export default function MatchingScreen() {
     return (
       <SelectView
         candidates={candidates}
+        excluded={excluded}
         selectedId={selectedId}
         assigning={assigning}
         onSelect={selectAgent}
@@ -59,12 +80,14 @@ export default function MatchingScreen() {
 // 候補をスコア順に並べて選んでもらう画面。
 function SelectView({
   candidates,
+  excluded,
   selectedId,
   assigning,
   onSelect,
   onConfirm,
 }: {
   candidates: RecommendedAgent[];
+  excluded: ExcludedAgent[];
   selectedId: string | null;
   assigning: boolean;
   onSelect: (agentId: string) => void;
@@ -98,6 +121,18 @@ function SelectView({
             onSelect={() => onSelect(agent.agent_id)}
           />
         ))}
+
+        {/* 除外された候補（フィルタで絞り込まれた理由を開示）。0 件なら非表示。 */}
+        {excluded.length > 0 && (
+          <View style={styles.excludedSection}>
+            <Text style={styles.excludedTitle}>除外された候補</Text>
+            {excluded.map((item) => (
+              <Text key={item.agent_id} style={styles.excludedItem}>
+                {item.full_name} ・ {formatDistance(item.distance_meters)} ・ {item.reason}
+              </Text>
+            ))}
+          </View>
+        )}
       </ScrollView>
       <View style={styles.footer}>
         <PrimaryButton
@@ -166,10 +201,10 @@ function AgentCard({
   selected: boolean;
   onSelect: () => void;
 }) {
-  const distanceLabel =
-    agent.distance_meters >= 1000
-      ? `${(agent.distance_meters / 1000).toFixed(1)}km`
-      : `${Math.round(agent.distance_meters)}m`;
+  const distanceLabel = formatDistance(agent.distance_meters);
+
+  // 受け渡し先スポット種別の日本語ラベル（旧 API で欠落時は null → バッジ非表示）。
+  const spotLabel = spotTypeLabel(agent.spot_type);
 
   // breakdown（特徴量名→0–1）を 3 因子に集約してバー表示（lib/scoring.ts と同じ語彙）。
   const factors = factorsFromBreakdown(agent.breakdown);
@@ -212,6 +247,30 @@ function AgentCard({
             color={selected ? colors.green : colors.grayLight}
           />
         </View>
+
+        {/* 受け渡し先スポット情報（種別バッジ・空き枠・受け取り時間帯）。拡張前 API では各値が
+            欠落しうるため、存在するものだけ描画する。 */}
+        {(spotLabel || agent.capacity_label || agent.pickup_window_label) && (
+          <View style={styles.spotInfo}>
+            {spotLabel && (
+              <View style={styles.spotBadge}>
+                <Text style={styles.spotBadgeText}>{spotLabel}</Text>
+              </View>
+            )}
+            {agent.capacity_label && (
+              <View style={styles.spotMetaRow}>
+                <Ionicons name="cube-outline" size={13} color={colors.gray} />
+                <Text style={styles.spotMeta}>{agent.capacity_label}</Text>
+              </View>
+            )}
+            {agent.pickup_window_label && (
+              <View style={styles.spotMetaRow}>
+                <Ionicons name="time-outline" size={13} color={colors.gray} />
+                <Text style={styles.spotMeta}>{agent.pickup_window_label}</Text>
+              </View>
+            )}
+          </View>
+        )}
 
         {/* スコア内訳（3 因子の横バー）。断定せず「対応しやすさ」の目安として表示。 */}
         <View style={styles.breakdown}>
@@ -279,4 +338,16 @@ const styles = StyleSheet.create({
   reasonChip: { backgroundColor: colors.greenPale, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
   reasonText: { fontSize: 12, fontWeight: '600', color: colors.green },
   footer: { padding: 16, borderTopWidth: 1, borderTopColor: colors.border, backgroundColor: colors.bg },
+
+  // 受け渡し先スポット情報（種別バッジ＋空き枠＋受け取り時間帯）
+  spotInfo: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 10 },
+  spotBadge: { backgroundColor: colors.greenLight, paddingHorizontal: 10, paddingVertical: 3, borderRadius: 10 },
+  spotBadgeText: { fontSize: 12, fontWeight: '700', color: colors.green },
+  spotMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  spotMeta: { fontSize: 12, color: colors.gray },
+
+  // 除外された候補セクション（補足情報として控えめに表示）
+  excludedSection: { marginTop: 8, paddingTop: 12, borderTopWidth: 1, borderTopColor: colors.border, gap: 6 },
+  excludedTitle: { fontSize: 13, fontWeight: '700', color: colors.grayLight },
+  excludedItem: { fontSize: 12, color: colors.grayLight, lineHeight: 18 },
 });

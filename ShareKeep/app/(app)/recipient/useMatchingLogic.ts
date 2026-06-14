@@ -17,6 +17,7 @@ import {
   markRecommendationChosen,
   isRecommendationEnabled,
   type RecommendedAgent,
+  type ExcludedAgent,
 } from '../../../features/recommend';
 
 export type MatchingMode = 'loading' | 'select' | 'waiting';
@@ -24,6 +25,8 @@ export type MatchingMode = 'loading' | 'select' | 'waiting';
 export type MatchingLogic = {
   mode: MatchingMode;
   candidates: RecommendedAgent[];
+  // フィルタで除外された候補（「除外された候補」セクションで開示）。
+  excluded: ExcludedAgent[];
   selectedId: string | null;
   assigning: boolean;
   selectAgent: (agentId: string) => void;
@@ -35,6 +38,7 @@ export type MatchingLogic = {
 export function useMatchingLogic(parcelId: string | undefined): MatchingLogic {
   const [mode, setMode] = useState<MatchingMode>('loading');
   const [candidates, setCandidates] = useState<RecommendedAgent[]>([]);
+  const [excluded, setExcluded] = useState<ExcludedAgent[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [assigning, setAssigning] = useState(false);
 
@@ -142,7 +146,7 @@ export function useMatchingLogic(parcelId: string | undefined): MatchingLogic {
       }
 
       try {
-        const agents = await recommendAgents({
+        const { agents, excluded: excludedAgents } = await recommendAgents({
           parcelId,
           recipientId,
           latitude,
@@ -157,6 +161,7 @@ export function useMatchingLogic(parcelId: string | undefined): MatchingLogic {
           return;
         }
         setCandidates(agents);
+        setExcluded(excludedAgents);
         setSelectedId(agents[0]?.agent_id ?? null);
         setMode('select');
       } catch {
@@ -213,5 +218,5 @@ export function useMatchingLogic(parcelId: string | undefined): MatchingLogic {
     beginWaiting();
   }, [parcelId, selectedId, assigning, candidates, beginWaiting]);
 
-  return { mode, candidates, selectedId, assigning, selectAgent, confirmSelection };
+  return { mode, candidates, excluded, selectedId, assigning, selectAgent, confirmSelection };
 }
