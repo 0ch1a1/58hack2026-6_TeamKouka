@@ -14,6 +14,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import QRCode from 'react-native-qrcode-svg';
 import { supabase, getDeliveryMatch } from '../../../lib/supabase';
 import { generateQrToken, subscribeParcel, fetchParcel } from '../../../features/parcels';
+import { sendMessage } from '../../../features/messages';
 import { fetchDeliveryLocation, subscribeDeliveryLocation } from '../../../features/tracking';
 import { isHandedOff } from '../../../lib/status';
 import { isMockParcelId, MOCK_PARCEL_INFO, buildMockQrToken } from '../../../lib/mockDemo';
@@ -54,6 +55,8 @@ export default function PickupReadyScreen() {
   const [deadlineAt, setDeadlineAt] = useState<string | null>(null);
   const [reportVisible, setReportVisible] = useState(false);
   const [deliveryLocation, setDeliveryLocation] = useState<DeliveryLocation | null>(null);
+  // 受取調整の定型メッセージ送信中フラグ（連打防止）。送信中は ETA ボタン群を無効化する。
+  const [sendingEta, setSendingEta] = useState(false);
 
   useEffect(() => {
     if (!parcelId) { setLoading(false); return; }
@@ -72,12 +75,12 @@ export default function PickupReadyScreen() {
         return;
       }
 
-      // 代理人(JOIN) / 追跡番号は parcelId だけで引けて互いに独立なので並列取得
+      // 代理受取スポット(JOIN) / 追跡番号は parcelId だけで引けて互いに独立なので並列取得
       const [
         { data: match, error: matchError },
         parcel,
       ] = await Promise.all([
-        // delivery_matches から代理人を取得（agent_id で profiles を JOIN・A7 許可）
+        // delivery_matches から代理受取スポットを取得（agent_id で profiles を JOIN・A7 許可）
         getDeliveryMatch(parcelId),
         // 追跡番号を parcels から取得（features 経由）
         fetchParcel(parcelId),
@@ -105,12 +108,12 @@ export default function PickupReadyScreen() {
       }
 
       if (matchError) {
-        // RLS またはネットワークエラー。代理人情報なしで続行（QR 表示は可能）。
+        // RLS またはネットワークエラー。代理受取スポット情報なしで続行（QR 表示は可能）。
         setLoading(false);
         return;
       }
       if (!match) {
-        // マッチがまだ存在しない（代理人未割り当て）。
+        // マッチがまだ存在しない（代理受取スポット未割り当て）。
         setLoading(false);
         return;
       }
@@ -182,9 +185,20 @@ export default function PickupReadyScreen() {
     };
   }, [parcelId]);
 
-  const handleGoNow = () => {
-    // TODO: Supabase で「向かっています」ステータスを更新
-    Alert.alert('代理人に通知しました', '代理人に「今から向かいます」と伝えました。');
+  // 受取調整の定型文を handover_messages へ送信する（sendMessage 経由）。
+  // 専用テーブルは作らず既存メッセージ基盤を流用し、代理受取スポット側へ受取予定を伝える。
+  const sendEtaMessage = async (body: string) => {
+    if (!parcelId || sendingEta) return;
+    setSendingEta(true);
+    try {
+      await sendMessage(parcelId, body);
+      Alert.alert('送信しました', `代理受取スポットに「${body}」と伝えました。`);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'メッセージの送信に失敗しました。';
+      Alert.alert('送信に失敗しました', msg);
+    } finally {
+      setSendingEta(false);
+    }
   };
 
   if (loading) {
@@ -204,7 +218,7 @@ export default function PickupReadyScreen() {
       <View style={styles.body}>
         <View style={styles.statusBanner}>
           <Ionicons name="home-outline" size={20} color={colors.green} />
-          <Text style={styles.statusText}>代理人が荷物を預かっています</Text>
+          <Text style={styles.statusText}>代理受取スポットが荷物を預かっています</Text>
         </View>
 
         <DeliveryProgress
@@ -213,7 +227,7 @@ export default function PickupReadyScreen() {
         />
 
         <Card>
-          <Text style={styles.cardSectionTitle}>代理人の情報</Text>
+          <Text style={styles.cardSectionTitle}>代理受取スポットの情報</Text>
           <View style={styles.agentRow}>
             <View style={styles.avatar}>
               <Ionicons name="person" size={28} color={colors.green} />
@@ -235,7 +249,35 @@ export default function PickupReadyScreen() {
           <StorageDeadlineBadge deadlineAt={deadlineAt} />
         </Card>
 
-        <PrimaryButton label="今から取りに行く" icon="walk-outline" onPress={handleGoNow} />
+        {/* 受取調整: 定型文を代理受取スポットへ送信（handover_messages 流用） */}
+        <Card>
+          <Text style={styles.cardSectionTitle}>受け取りの予定を伝える</Text>
+          <View style={styles.etaButtons}>
+            <PrimaryButton
+              label="今から取りに行きます"
+              icon="walk-outline"
+              onPress={() => sendEtaMessage('今から取りに行きます')}
+              loading={sendingEta}
+              disabled={sendingEta}
+            />
+            <TouchableOpacity
+              style={[styles.etaChip, sendingEta && styles.etaChipDisabled]}
+              onPress={() => sendEtaMessage('約30分で着きます')}
+              disabled={sendingEta}
+            >
+              <Ionicons name="time-outline" size={18} color={colors.green} />
+              <Text style={styles.etaChipText}>約30分で着きます</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.etaChip, sendingEta && styles.etaChipDisabled]}
+              onPress={() => sendEtaMessage('19:30ごろ取りに行きます')}
+              disabled={sendingEta}
+            >
+              <Ionicons name="time-outline" size={18} color={colors.green} />
+              <Text style={styles.etaChipText}>19:30ごろ取りに行きます</Text>
+            </TouchableOpacity>
+          </View>
+        </Card>
 
         <TouchableOpacity style={styles.secondaryButton} onPress={() => setQrVisible(true)}>
           <Ionicons name="qr-code-outline" size={20} color={colors.green} />
@@ -282,7 +324,7 @@ export default function PickupReadyScreen() {
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
             <Text style={styles.modalTitle}>引き渡し確認QR</Text>
-            <Text style={styles.modalDesc}>代理人に提示してスキャンしてもらってください</Text>
+            <Text style={styles.modalDesc}>代理受取スポットに提示してスキャンしてもらってください</Text>
 
             <View style={styles.qrWrap}>
               {qrToken && <QRCode value={qrToken} size={200} />}
@@ -360,6 +402,27 @@ const styles = StyleSheet.create({
   agentAddress: {
     fontSize: 13,
     color: colors.gray,
+  },
+  etaButtons: {
+    gap: 12,
+    marginTop: 8,
+  },
+  etaChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: colors.greenLight,
+    borderRadius: radius.button,
+    paddingVertical: 14,
+  },
+  etaChipDisabled: {
+    opacity: 0.5,
+  },
+  etaChipText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: colors.green,
   },
   secondaryButton: {
     flexDirection: 'row',

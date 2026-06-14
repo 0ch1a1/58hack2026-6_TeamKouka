@@ -161,6 +161,33 @@ export function CompletionModal({ visible, onClose, co2Saved, pointsEarned = 0 }
               )}
             </Card>
 
+            {/* 精算状況（静的表示・MVP）。モーダルは即表示→ホーム遷移するため、
+                完了画面本体だけでなくここにも pending を出す。実テーブルは未接続。
+                受取人視点のため、スポット報酬は代理受取スポット側へ付与予定である旨を示す。 */}
+            <Card style={styles.statCard}>
+              <View style={styles.settleRow}>
+                <View style={styles.settleLabelWrap}>
+                  <Ionicons name="business-outline" size={20} color={colors.gray} />
+                  <Text style={styles.settleLabel}>配送会社請求</Text>
+                </View>
+                <View style={styles.pendingBadge}>
+                  <Text style={styles.pendingBadgeText}>pending</Text>
+                </View>
+              </View>
+              <View style={styles.settleRow}>
+                <View style={styles.settleLabelWrap}>
+                  <Ionicons name="gift-outline" size={20} color={colors.gray} />
+                  <Text style={styles.settleLabel}>スポット報酬</Text>
+                </View>
+                <View style={styles.pendingBadge}>
+                  <Text style={styles.pendingBadgeText}>pending</Text>
+                </View>
+              </View>
+              <Text style={styles.settleNote}>
+                スポット報酬は代理受取スポット側へ付与予定です。
+              </Text>
+            </Card>
+
             <RegionalContributionCard style={styles.regionalCard} />
 
             <PrimaryButton label="閉じる" icon="home-outline" onPress={onClose} style={styles.button} />
@@ -209,6 +236,13 @@ const styles = StyleSheet.create({
   statText: { gap: 2 },
   statValue: { fontSize: 24, fontWeight: '800', color: colors.green },
   statLabel: { fontSize: 13, color: colors.gray },
+  // 精算状況（静的表示）
+  settleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%' },
+  settleLabelWrap: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  settleLabel: { fontSize: 15, color: colors.ink },
+  pendingBadge: { backgroundColor: colors.bg, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 4 },
+  pendingBadgeText: { fontSize: 13, fontWeight: '700', color: colors.gray },
+  settleNote: { fontSize: 12, color: colors.gray, lineHeight: 18 },
   regionalCard: { width: '100%' },
   button: { width: '100%', marginTop: 4 },
 });
