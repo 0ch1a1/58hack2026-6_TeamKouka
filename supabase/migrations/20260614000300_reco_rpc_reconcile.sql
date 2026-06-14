@@ -14,7 +14,13 @@
 --   - role='agent' で受取人/配送会社の stray な agent_profiles 行を候補から除外
 -- =============================================================================
 
-create or replace function public.get_recommendation_candidates(
+-- 20260614000200 が 12 列で定義済みのため、戻り型(19列)へ変更するには DROP が必須
+-- (CREATE OR REPLACE では "cannot change return type of existing function" になる)。
+drop function if exists public.get_recommendation_candidates(
+  double precision, double precision, integer, text[]
+);
+
+create function public.get_recommendation_candidates(
   p_lat             double precision,
   p_lng             double precision,
   p_radius_m        integer  default 2000,
@@ -90,6 +96,11 @@ $function$;
 
 comment on function public.get_recommendation_candidates is
   '近接代理人候補と特徴量(距離/時間/実績/保管負荷/評価/スポット属性)を返す。security definer + authenticated 付与で受取人アプリから直接呼べる。role=agent のみ。';
+
+-- DROP→CREATE で既定 PUBLIC に EXECUTE が付くため剥奪し、必要なロールにのみ付与する。
+revoke execute on function public.get_recommendation_candidates(
+  double precision, double precision, integer, text[]
+) from public;
 
 -- 受取人アプリ(authenticated)と推薦サービス(service_role)の双方から呼べるようにする。
 grant execute on function public.get_recommendation_candidates(
