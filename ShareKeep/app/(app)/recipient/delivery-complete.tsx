@@ -11,8 +11,10 @@ import {
   Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import * as Crypto from 'expo-crypto';
 import { router, useLocalSearchParams } from 'expo-router';
 import { fetchParcel } from '../../../features/parcels';
+import { appendParcelEvent, fetchParcelEvents } from '../../../features/parcelEvents';
 import { createReview, fetchReviewForParcel, type AgentReview } from '../../../features/reviews';
 import { colors, spacing, radius } from '../../../lib/theme';
 import { PrimaryButton, Card, InfoRow } from '../../../components/ui';
@@ -24,6 +26,21 @@ type Result = {
 };
 
 const MAX_RATING = 5;
+
+// 受取完了の custody イベント用に、parcelId から決定的な UUID（冪等キー）を生成する。
+// client_event_id は uuid 型なので生文字列は使えない。SHA-256(seed) の先頭16バイトを
+// UUIDv5 風（version=5, variant=8..b）に整形し、同一 parcel では常に同じ値になるようにする。
+// これにより再マウント/競合時も appendParcelEvent の 23505 冪等パスに収束する。
+async function deterministicEventId(seed: string): Promise<string> {
+  const hex = await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, seed);
+  const h = hex.slice(0, 32);
+  const version = '5';
+  const variant = ((parseInt(h[16], 16) & 0x3) | 0x8).toString(16);
+  return (
+    `${h.slice(0, 8)}-${h.slice(8, 12)}-${version}${h.slice(13, 16)}-` +
+    `${variant}${h.slice(17, 20)}-${h.slice(20, 32)}`
+  );
+}
 
 export default function DeliveryCompleteScreen() {
   const { parcelId } = useLocalSearchParams<{ parcelId: string }>();
@@ -43,7 +60,7 @@ export default function DeliveryCompleteScreen() {
 
     const fetchData = async () => {
       try {
-        // ポイント（報酬）は代理人にのみ付与され受取人は0件のため、受取人の完了画面では
+        // ポイント（報酬）は代理受取スポットにのみ付与され受取人は0件のため、受取人の完了画面では
         // ポイントを表示しない（CO2削減貢献を主表示）。よって parcel 取得のみ。
         const parcel = await fetchParcel(parcelId);
         setResult({
@@ -53,6 +70,30 @@ export default function DeliveryCompleteScreen() {
       } catch {
         // 取得失敗時も結果画面はデフォルト表示で継続（既存UXを維持）
         setResult({ trackingNo: '—', co2Saved: 0 });
+      }
+
+      // 保管証跡（機能9 監査ログ）への custody イベント追記。
+      // event_type は migration(20260613200100_parcel_events.sql)の許可値に厳密に合わせる。
+      // 「代理受取スポット→受取人へ引き渡し済み」に対応する許可値は handoff_secondary
+      //（handoff_primary=配達員→スポット, handoff_secondary=スポット→受取人 の語彙）。
+      // 冪等性: parcelId から決定的な client_event_id を生成し、再マウント/再描画で重複追記しても
+      // appendParcelEvent 側の 23505 冪等パスに乗る。加えて事前に既存イベント有無も確認する。
+      // Edge Function は呼ばない（クライアント追記の MVP 配線）。
+      try {
+        const events = await fetchParcelEvents(parcelId);
+        const already = events.some((ev) => ev.event_type === 'handoff_secondary');
+        if (!already) {
+          const clientEventId = await deterministicEventId(`${parcelId}:handoff_secondary`);
+          await appendParcelEvent({
+            parcelId,
+            eventType: 'handoff_secondary',
+            // 決定的な冪等キー（parcelId 由来の固定 UUID）。同一 parcel の受取完了は論理的に1回。
+            clientEventId,
+            payload: { note: '代理受取スポットから受取人へ引き渡し済み' },
+          });
+        }
+      } catch {
+        // 証跡追記の失敗は完了画面の表示を妨げない（ベストエフォート）。
       }
 
       // 評価の投稿済み確認は CO2 表示とは独立。失敗してもフォームは出す（未投稿扱い）。
@@ -142,9 +183,36 @@ export default function DeliveryCompleteScreen() {
           <InfoRow label="追跡番号" value={result?.trackingNo ?? '—'} />
         </Card>
 
+        {/* 精算状況（静的表示・MVP）。実テーブルは未接続で文言はハードコード。
+            受取人視点のため、スポット報酬は代理受取スポット側へ付与予定である旨を説明する。 */}
+        <Card>
+          <Text style={styles.cardSectionTitle}>精算状況</Text>
+          <View style={styles.settleRow}>
+            <View style={styles.settleLabelWrap}>
+              <Ionicons name="business-outline" size={18} color={colors.gray} />
+              <Text style={styles.settleLabel}>配送会社請求</Text>
+            </View>
+            <View style={styles.pendingBadge}>
+              <Text style={styles.pendingBadgeText}>pending</Text>
+            </View>
+          </View>
+          <View style={styles.settleRow}>
+            <View style={styles.settleLabelWrap}>
+              <Ionicons name="gift-outline" size={18} color={colors.gray} />
+              <Text style={styles.settleLabel}>スポット報酬</Text>
+            </View>
+            <View style={styles.pendingBadge}>
+              <Text style={styles.pendingBadgeText}>pending</Text>
+            </View>
+          </View>
+          <Text style={styles.settleNote}>
+            スポット報酬は代理受取スポット側へ付与予定です。請求・報酬の確定処理はこの後行われます。
+          </Text>
+        </Card>
+
         {/* 評価フォーム。投稿済みなら「評価済み」を表示、未投稿なら星＋コメントで送信。 */}
         <Card>
-          <Text style={styles.cardSectionTitle}>代理人の評価</Text>
+          <Text style={styles.cardSectionTitle}>代理受取スポットの評価</Text>
           {existingReview ? (
             <View style={styles.reviewedWrap}>
               <View style={styles.starsRow}>
@@ -167,7 +235,7 @@ export default function DeliveryCompleteScreen() {
             </View>
           ) : (
             <View style={styles.formWrap}>
-              <Text style={styles.formHint}>代理人の対応はいかがでしたか？</Text>
+              <Text style={styles.formHint}>代理受取スポットの対応はいかがでしたか？</Text>
               <View style={styles.starsRow}>
                 {Array.from({ length: MAX_RATING }, (_, i) => {
                   const value = i + 1;
@@ -242,6 +310,13 @@ const styles = StyleSheet.create({
   co2Value: { fontSize: 28, fontWeight: '800', color: colors.green },
   co2Label: { fontSize: 13, color: colors.greenDark },
   primaryButton: { marginTop: 8 },
+  // 精算状況（静的表示）
+  settleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: spacing.sm },
+  settleLabelWrap: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
+  settleLabel: { fontSize: 15, color: colors.ink },
+  pendingBadge: { backgroundColor: colors.fieldBg, borderRadius: radius.button, paddingHorizontal: 12, paddingVertical: 4, borderWidth: 1, borderColor: colors.border },
+  pendingBadgeText: { fontSize: 13, fontWeight: '700', color: colors.gray },
+  settleNote: { fontSize: 12, color: colors.gray, marginTop: spacing.sm, lineHeight: 18 },
   // 評価フォーム
   formWrap: { gap: spacing.md, marginTop: spacing.sm },
   formHint: { fontSize: 14, color: colors.ink },
