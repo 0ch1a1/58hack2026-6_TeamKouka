@@ -21,6 +21,7 @@ import { questStatusMeta } from '../../../lib/status';
 import { StorageDeadlineBadge } from '../../../components/StorageDeadlineBadge';
 import { SupportReportForm } from '../../../components/SupportReportForm';
 import { generateQrToken, verifyRecipientQr, updateParcelStatus } from '../../../features/parcels';
+import { isMockParcelId, buildMockQrToken } from '../../../lib/mockDemo';
 import { fetchDeliveryLocation, upsertDeliveryLocation } from '../../../features/tracking';
 
 type MatchedParcel = {
@@ -162,9 +163,8 @@ export default function AgentParcelsScreen() {
   }, [fetchParcels]);
 
   const handleShowQR = async (parcel: MatchedParcel) => {
-    // モックデータはDBに実体がないためダミートークンを使用
-    if (parcel.parcelId.startsWith('mock-')) {
-      setQrParcel({ ...parcel, qrToken: `DEMO:${parcel.trackingNo}` });
+    if (isMockParcelId(parcel.parcelId)) {
+      setQrParcel({ ...parcel, qrToken: buildMockQrToken(parcel.trackingNo) });
       return;
     }
 
@@ -192,7 +192,7 @@ export default function AgentParcelsScreen() {
   // 受取人側 matching の subscribeParcel が発火し pickup-ready へ進む。副作用（ポイント/CO2）は
   // 後段の verifyRecipientQr で付くため、ここで updateParcelStatus を使っても報酬計算は壊れない（A0 確認済み）。
   const handleReceive = async (parcel: MatchedParcel) => {
-    if (parcel.parcelId.startsWith('mock-')) {
+    if (isMockParcelId(parcel.parcelId)) {
       setParcels((prev) => prev.map((p) =>
         p.parcelId === parcel.parcelId
           ? { ...p, parcelStatus: 'delivered_to_agent', deadlineAt: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString() }
@@ -246,7 +246,7 @@ export default function AgentParcelsScreen() {
   };
 
   const handleAdvanceTracking = async (parcel: MatchedParcel) => {
-    if (parcel.parcelId.startsWith('mock-')) {
+    if (isMockParcelId(parcel.parcelId)) {
       setDemoProgress((prev) => ({ ...prev, [parcel.parcelId]: nextDemoProgress(prev[parcel.parcelId]) }));
       return;
     }

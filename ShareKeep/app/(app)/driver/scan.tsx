@@ -6,6 +6,7 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import { colors, spacing, radius } from '../../../lib/theme';
 import { ScreenHeader, Card, PrimaryButton } from '../../../components/ui';
 import { verifyAgentQr, fetchParcel } from '../../../features/parcels';
+import { isDemoQrToken } from '../../../lib/mockDemo';
 import { logError } from '../../../lib/logger';
 
 // 代理人QR読み取り（配達員向け）。
@@ -89,6 +90,13 @@ export default function DriverScanScreen() {
       setScanned(true);
       setPhase('verifying');
       setErrorMsg(null);
+
+      // デモ用QRトークンはEdge Functionを呼ばず成功扱いにする
+      if (isDemoQrToken(data)) {
+        setStatusConfirmed(null);
+        setPhase('done');
+        return;
+      }
 
       try {
         // 代理人QRを検証。used 更新 / status 遷移（delivered_to_agent）/ 副作用は
