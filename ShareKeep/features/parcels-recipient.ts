@@ -198,7 +198,10 @@ export async function fetchAgentCandidates(params: {
   return (data ?? []) as Array<{ user_id: string; full_name: string | null; distance_meters: number }>
 }
 
-// 代理人ホワイトリストを一括保存し、parcel を agent_assigned 状態に移行する。
+// 代理人ホワイトリスト（候補=preference）を一括保存する。status は変更しない。
+// 実際の割当（status を agent_assigned に進める）は配達員の assign_agent_to_parcel が行う。
+// status を delivery_failed のまま保つことで、配達員ホームの「代理人を探す」導線が残り、
+// delivery_matches 生成＋通知発火に到達できる。
 // 既存のホワイトリストは全削除してから再挿入（replace semantics）。
 export async function setAgentWhitelist(parcelId: string, agentIds: string[]): Promise<void> {
   const { error: delErr } = await supabase
@@ -213,12 +216,6 @@ export async function setAgentWhitelist(parcelId: string, agentIds: string[]): P
       .insert(agentIds.map((agentId, i) => ({ parcel_id: parcelId, agent_id: agentId, priority: i + 1 })))
     if (insErr) throw insErr
   }
-
-  const { error: statusErr } = await supabase
-    .from('parcels')
-    .update({ status: 'agent_assigned' })
-    .eq('id', parcelId)
-  if (statusErr) throw statusErr
 }
 
 // 荷物に設定されたホワイトリストを priority 順で取得する。

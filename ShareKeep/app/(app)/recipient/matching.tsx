@@ -9,9 +9,9 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { colors } from '../../../lib/theme';
-import { ScreenHeader, Card, PrimaryButton } from '../../../components/ui';
+import { ScreenHeader, Card, PrimaryButton, EmptyState } from '../../../components/ui';
 import { type RecommendedAgent, type ExcludedAgent, type SpotType } from '../../../features/recommend';
 import { useMatchingLogic } from './useMatchingLogic';
 import { LoadingDots } from './LoadingDots';
@@ -48,8 +48,12 @@ function formatDistance(meters: number): string {
 export default function MatchingScreen() {
   const { parcelId } = useLocalSearchParams<{ parcelId: string; trackingNumber: string }>();
 
-  const { mode, candidates, excluded, selectedIds, saving, toggleAgent, moveUp, moveDown, confirmWhitelist } =
+  const { mode, errorMessage, retry, candidates, excluded, selectedIds, saving, toggleAgent, moveUp, moveDown, confirmWhitelist } =
     useMatchingLogic(parcelId);
+
+  if (mode === 'error') {
+    return <ErrorView message={errorMessage} onRetry={retry} />;
+  }
 
   if (mode === 'select') {
     return (
@@ -98,6 +102,24 @@ function SelectView({
       .catch(() => {});
     return () => { active = false; };
   }, [candidates]);
+
+  // 候補ゼロ件: 空状態を表示して戻る導線のみ提供する（保存できる候補がないため）。
+  if (candidates.length === 0) {
+    return (
+      <SafeAreaView style={styles.safe}>
+        <ScreenHeader title="代理人を選ぶ" />
+        <View style={styles.body}>
+          <EmptyState
+            icon="people-outline"
+            message="近くに候補が見つかりませんでした。"
+          />
+        </View>
+        <View style={styles.footer}>
+          <PrimaryButton label="戻る" icon="arrow-back" onPress={() => router.back()} />
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -339,6 +361,28 @@ function LoadingView() {
   );
 }
 
+// 失敗時の画面: GPS許可拒否・現在地取得失敗・候補取得失敗で表示する。
+// 「再試行」で候補取得を再実行、「戻る」で一覧へ戻る（loading のまま固まらせない）。
+function ErrorView({ message, onRetry }: { message: string | null; onRetry: () => void }) {
+  return (
+    <SafeAreaView style={styles.safe}>
+      <ScreenHeader title="代理人を探せませんでした" />
+      <View style={styles.body}>
+        <EmptyState
+          icon="alert-circle-outline"
+          message={message ?? '代理人の検索に失敗しました。'}
+        />
+      </View>
+      <View style={styles.footer}>
+        <PrimaryButton label="再試行" icon="refresh" onPress={onRetry} />
+        <TouchableOpacity style={styles.errorBackBtn} onPress={() => router.back()}>
+          <Text style={styles.errorBackText}>戻る</Text>
+        </TouchableOpacity>
+      </View>
+    </SafeAreaView>
+  );
+}
+
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
 
@@ -395,7 +439,11 @@ const styles = StyleSheet.create({
   reasonChip: { backgroundColor: colors.greenPale ?? colors.greenLight, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
   reasonText: { fontSize: 12, fontWeight: '600', color: colors.green },
 
-  footer: { padding: 16, borderTopWidth: 1, borderTopColor: colors.border, backgroundColor: colors.bg },
+  footer: { padding: 16, borderTopWidth: 1, borderTopColor: colors.border, backgroundColor: colors.bg, gap: 8 },
+
+  // エラー画面の「戻る」（再試行ボタンの下に置く控えめなテキストボタン）
+  errorBackBtn: { alignItems: 'center', paddingVertical: 10 },
+  errorBackText: { fontSize: 15, fontWeight: '600', color: colors.gray },
 
   // 受け渡し先スポット情報
   spotInfo: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 10 },

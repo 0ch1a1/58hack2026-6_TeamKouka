@@ -16,10 +16,13 @@ import {
   type ExcludedAgent,
 } from '../../../features/recommend';
 
-export type MatchingMode = 'loading' | 'select';
+export type MatchingMode = 'loading' | 'select' | 'error';
 
 export type MatchingLogic = {
   mode: MatchingMode;
+  // mode==='error' のときに表示する失敗理由メッセージ。
+  errorMessage: string | null;
+  retry: () => void;
   candidates: RecommendedAgent[];
   // ハードフィルタで除外された候補（「除外された候補」セクションで理由を開示）。
   excluded: ExcludedAgent[];
@@ -34,16 +37,34 @@ export type MatchingLogic = {
 
 export function useMatchingLogic(parcelId: string | undefined): MatchingLogic {
   const [mode, setMode] = useState<MatchingMode>('loading');
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [candidates, setCandidates] = useState<RecommendedAgent[]>([]);
   const [excluded, setExcluded] = useState<ExcludedAgent[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
+  // 再試行トリガ。インクリメントすると候補取得 effect が再実行される。
+  const [attempt, setAttempt] = useState(0);
   const cancelledRef = useRef(false);
+
+  const retry = useCallback(() => {
+    setMode('loading');
+    setErrorMessage(null);
+    setAttempt((n) => n + 1);
+  }, []);
 
   useEffect(() => {
     cancelledRef.current = false;
     if (!parcelId) return;
     let cancelled = false;
+    setMode('loading');
+    setErrorMessage(null);
+
+    // 失敗時の共通ハンドラ: error モードへ遷移しメッセージを表示する（loading のまま固まらせない）。
+    const fail = (message: string) => {
+      if (cancelled) return;
+      setErrorMessage(message);
+      setMode('error');
+    };
 
     const start = async () => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -66,8 +87,9 @@ export function useMatchingLogic(parcelId: string | undefined): MatchingLogic {
       } else {
         try {
           const { status } = await Location.requestForegroundPermissionsAsync();
+          if (cancelled) return;
           if (status !== 'granted') {
-            Alert.alert('位置情報の許可が必要です', '近くの代理人を探すために位置情報の利用を許可してください。');
+            fail('近くの代理人を探すには位置情報の利用許可が必要です。設定から許可してください。');
             return;
           }
           const position = await Location.getCurrentPositionAsync({});
@@ -75,7 +97,7 @@ export function useMatchingLogic(parcelId: string | undefined): MatchingLogic {
           latitude = position.coords.latitude;
           longitude = position.coords.longitude;
         } catch {
-          Alert.alert('エラー', '現在地の取得に失敗しました。位置情報を有効にしてからお試しください。');
+          fail('現在地の取得に失敗しました。位置情報を有効にしてからお試しください。');
           return;
         }
       }
@@ -117,7 +139,7 @@ export function useMatchingLogic(parcelId: string | undefined): MatchingLogic {
             reasons: [],
           }));
         } catch {
-          Alert.alert('エラー', '代理人の取得に失敗しました。しばらくしてからお試しください。');
+          fail('代理人の取得に失敗しました。しばらくしてからお試しください。');
           return;
         }
       }
@@ -136,7 +158,7 @@ export function useMatchingLogic(parcelId: string | undefined): MatchingLogic {
       cancelled = true;
       cancelledRef.current = true;
     };
-  }, [parcelId]);
+  }, [parcelId, attempt]);
 
   // チェックボックスのトグル。未選択→末尾に追加、選択済み→除去。
   const toggleAgent = useCallback((agentId: string) => {
@@ -181,8 +203,9 @@ export function useMatchingLogic(parcelId: string | undefined): MatchingLogic {
     }
     if (cancelledRef.current) return;
     setSaving(false);
+    Alert.alert('登録しました', '代理人候補を保存しました。配達員が割り当てると請負が開始します。');
     router.back();
   }, [parcelId, selectedIds, saving]);
 
-  return { mode, candidates, excluded, selectedIds, saving, toggleAgent, moveUp, moveDown, confirmWhitelist };
+  return { mode, errorMessage, retry, candidates, excluded, selectedIds, saving, toggleAgent, moveUp, moveDown, confirmWhitelist };
 }
