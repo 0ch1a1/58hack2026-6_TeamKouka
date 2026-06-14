@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView, ActivityIndicator, Alert, PanResponder } from 'react-native';
+import { useState, useEffect, useCallback } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView, ActivityIndicator, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import TreeScene from '../../components/TreeScene';
@@ -53,19 +53,6 @@ export default function HomeScreen() {
   // デモ用にステージを手動選択可能にする（XP連動時は xpStage のみ使う）
   const [stage, setStage] = useState(xpStage);
 
-  // 3Dモデル回転制御
-  const rotationRef = useRef(0);
-  const invalidateRef = useRef<() => void>(() => {});
-  const panResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onPanResponderMove: (_, gesture) => {
-        rotationRef.current += gesture.dx * 0.008;
-        invalidateRef.current();
-      },
-    }),
-  ).current;
-
   const handleSignOut = useCallback(async () => {
     try {
       await signOut();
@@ -105,12 +92,8 @@ export default function HomeScreen() {
       <Text style={styles.stageLabel}>{STAGE_LABELS[stage]}</Text>
 
       {/* 3D木ビジュアル（ドラッグで回転） */}
-      <View style={styles.treeContainer} {...panResponder.panHandlers}>
-        <TreeScene
-          stage={stage}
-          rotationRef={rotationRef}
-          onInvalidate={(fn) => { invalidateRef.current = fn; }}
-        />
+      <View style={styles.treeContainer}>
+        <TreeScene stage={stage} />
       </View>
 
       {/* デモ用ステージ選択 */}

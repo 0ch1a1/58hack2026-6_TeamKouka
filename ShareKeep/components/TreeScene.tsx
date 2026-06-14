@@ -1,4 +1,5 @@
 import React, { useEffect, useRef } from 'react';
+import { View, PanResponder } from 'react-native';
 import { Canvas, useThree, useFrame } from '@react-three/fiber/native';
 import * as THREE from 'three';
 
@@ -310,24 +311,53 @@ function Stage4() {
 
 const STAGES = [Stage0, Stage1, Stage2, Stage3, Stage4];
 
-export default function TreeScene({ stage, onReady, rotationRef, onInvalidate }: Props) {
+export default function TreeScene({ stage, onReady, rotationRef: externalRotRef, onInvalidate }: Props) {
   const s = Math.min(4, Math.max(0, stage));
+
+  // 回転値は外部 ref があればそれを使い、なければ内部 ref を使う
+  const localRotRef = useRef(0);
+  const rotRef = externalRotRef ?? localRotRef;
+
+  // Canvas 内の invalidate 関数をここから呼べるよう ref で保持
+  const invalidateFnRef = useRef<(() => void) | null>(null);
+
+  // ドラッグ回転。dx は累積値なので前フレームとの差分を使う
+  const prevDxRef = useRef(0);
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderGrant: () => { prevDxRef.current = 0; },
+      onPanResponderMove: (_, g) => {
+        const delta = g.dx - prevDxRef.current;
+        prevDxRef.current = g.dx;
+        rotRef.current += delta * 0.012;
+        invalidateFnRef.current?.();
+      },
+    }),
+  ).current;
+
   return (
-    <Canvas
-      camera={{ position: CAMERA_CFG[0].pos, fov: CAMERA_CFG[0].fov }}
-      frameloop="demand"
-      dpr={1}
-      style={{ width: '100%', height: '100%' }}
-      gl={{ antialias: false, powerPreference: 'low-power' }}
-      onCreated={({ gl }) => { gl.setClearColor('#E8F5E9', 1); }}
-    >
-      <CameraRig stage={s} />
-      <SceneContent
-        stage={s}
-        rotationRef={rotationRef}
-        onInvalidate={onInvalidate}
-        onReady={onReady}
-      />
-    </Canvas>
+    <View style={{ flex: 1 }} {...panResponder.panHandlers}>
+      <Canvas
+        camera={{ position: CAMERA_CFG[0].pos, fov: CAMERA_CFG[0].fov }}
+        frameloop="demand"
+        dpr={1}
+        style={{ width: '100%', height: '100%' }}
+        gl={{ antialias: false, powerPreference: 'low-power' }}
+        onCreated={({ gl }) => { gl.setClearColor('#E8F5E9', 1); }}
+      >
+        <CameraRig stage={s} />
+        <SceneContent
+          stage={s}
+          rotationRef={rotRef}
+          onInvalidate={(fn) => {
+            invalidateFnRef.current = fn;
+            onInvalidate?.(fn);
+          }}
+          onReady={onReady}
+        />
+      </Canvas>
+    </View>
   );
 }
