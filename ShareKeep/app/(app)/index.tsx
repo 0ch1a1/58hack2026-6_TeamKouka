@@ -9,19 +9,18 @@ import { RegionalContributionCard } from '../../components/RegionalContributionC
 import { NotificationBell } from '../../components/NotificationBell';
 import { getMyRole, signOut } from '../../features/auth';
 import { supabase } from '../../lib/supabase';
+import { logError } from '../../lib/logger';
 
 type Mode = 'recipient' | 'agent';
 
 type AgentStats = {
   level: number;
   points: number;
-  completedDeliveries: number;
 };
 
 const EMPTY_AGENT_STATS: AgentStats = {
   level: 0,
   points: 0,
-  completedDeliveries: 0,
 };
 
 const STAGE_LABELS = ['芽吹き', '若木', '成木', '大木', '実りの木'];
@@ -56,7 +55,7 @@ export default function HomeScreen() {
 
     const fetchAgentStats = async () => {
       if (mode !== 'agent') {
-        setAgentStats(EMPTY_AGENT_STATS);
+        if (active) setAgentStats(EMPTY_AGENT_STATS);
         return;
       }
 
@@ -66,18 +65,21 @@ export default function HomeScreen() {
         return;
       }
 
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('agent_profiles')
-        .select('points, level, completed_deliveries')
+        .select('points, level')
         .eq('user_id', user.id)
         .maybeSingle();
 
       if (!active) return;
 
+      if (error) {
+        logError('home:fetchAgentStats', error);
+      }
+
       setAgentStats({
-        level: data?.level ?? 0,
+        level: data ? data.level ?? 1 : 0,
         points: data?.points ?? 0,
-        completedDeliveries: data?.completed_deliveries ?? 0,
       });
     };
 
