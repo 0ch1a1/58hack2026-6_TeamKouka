@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView, ActivityIndicator, Alert, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import TreeScene from '../../components/TreeScene';
@@ -88,6 +88,10 @@ export default function HomeScreen() {
         </View>
       </View>
 
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
       {/* 木のステージラベル */}
       <Text style={styles.stageLabel}>{STAGE_LABELS[stage]}</Text>
 
@@ -155,6 +159,7 @@ export default function HomeScreen() {
           <AgentContent />
         )}
       </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -207,6 +212,9 @@ const styles = StyleSheet.create({
   loading: {
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  scrollContent: {
+    paddingBottom: 24,
   },
   header: {
     flexDirection: 'row',
