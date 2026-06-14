@@ -162,6 +162,12 @@ export default function AgentParcelsScreen() {
   }, [fetchParcels]);
 
   const handleShowQR = async (parcel: MatchedParcel) => {
+    // モックデータはDBに実体がないためダミートークンを使用
+    if (parcel.parcelId.startsWith('mock-')) {
+      setQrParcel({ ...parcel, qrToken: `DEMO:${parcel.trackingNo}` });
+      return;
+    }
+
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
       Alert.alert('エラー', 'ユーザー情報を取得できませんでした。');
@@ -186,6 +192,15 @@ export default function AgentParcelsScreen() {
   // 受取人側 matching の subscribeParcel が発火し pickup-ready へ進む。副作用（ポイント/CO2）は
   // 後段の verifyRecipientQr で付くため、ここで updateParcelStatus を使っても報酬計算は壊れない（A0 確認済み）。
   const handleReceive = async (parcel: MatchedParcel) => {
+    if (parcel.parcelId.startsWith('mock-')) {
+      setParcels((prev) => prev.map((p) =>
+        p.parcelId === parcel.parcelId
+          ? { ...p, parcelStatus: 'delivered_to_agent', deadlineAt: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString() }
+          : p,
+      ));
+      Alert.alert('受領しました', '荷物を保管中にしました。受取人が受け取りに来られます。');
+      return;
+    }
     try {
       await updateParcelStatus(parcel.parcelId, 'delivered_to_agent');
       await fetchParcels();
@@ -231,6 +246,10 @@ export default function AgentParcelsScreen() {
   };
 
   const handleAdvanceTracking = async (parcel: MatchedParcel) => {
+    if (parcel.parcelId.startsWith('mock-')) {
+      setDemoProgress((prev) => ({ ...prev, [parcel.parcelId]: nextDemoProgress(prev[parcel.parcelId]) }));
+      return;
+    }
     setTrackingBusyParcelId(parcel.parcelId);
     try {
       const currentLocation = await fetchDeliveryLocation(parcel.parcelId);
