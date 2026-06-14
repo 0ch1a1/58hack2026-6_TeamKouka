@@ -22,6 +22,7 @@ FALLBACK_WEIGHTS = {
     "is_weekend": 0.00,
     "is_evening": 0.00,
     "rating_score": 0.12,
+    "spot_type_score": 0.05,
 }
 
 REASON_LABELS = {
@@ -34,6 +35,7 @@ REASON_LABELS = {
     "is_weekend": "週末の文脈に合っている",
     "is_evening": "夕方以降の文脈に合っている",
     "rating_score": "受取人からの評価が高い",
+    "spot_type_score": "信頼できる店舗・施設スポット",
 }
 
 

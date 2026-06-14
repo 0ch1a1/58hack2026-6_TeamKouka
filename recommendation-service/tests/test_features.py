@@ -17,6 +17,7 @@ from app.features import (
     build_features,
     calculate_day_match,
     calculate_rating_score,
+    calculate_spot_type_score,
     calculate_time_score,
     normalize_weekdays,
 )
@@ -182,3 +183,35 @@ def test_rating_score_in_feature_names_and_build_features():
     # avg_rating=5 → 1.0。
     features = build_features({"distance_meters": 100, "avg_rating": 5.0}, _now(12))
     assert features["rating_score"] == pytest.approx(1.0)
+
+
+# --- spot_type_score --------------------------------------------------------
+
+
+def test_spot_type_score_known_values():
+    assert calculate_spot_type_score("store") == pytest.approx(1.0)
+    assert calculate_spot_type_score("manager_room") == pytest.approx(0.7)
+    assert calculate_spot_type_score("facility") == pytest.approx(0.6)
+    assert calculate_spot_type_score("individual") == pytest.approx(0.3)
+
+
+def test_spot_type_score_none_and_unknown_default():
+    assert calculate_spot_type_score(None) == pytest.approx(0.6)
+    assert calculate_spot_type_score("warehouse") == pytest.approx(0.6)
+    assert calculate_spot_type_score("") == pytest.approx(0.6)
+
+
+def test_feature_names_has_spot_type_score_last():
+    assert len(FEATURE_NAMES) == 10
+    assert FEATURE_NAMES[-1] == "spot_type_score"
+    # rating_score の直後に来る。
+    assert FEATURE_NAMES[-2] == "rating_score"
+
+
+def test_spot_type_score_in_build_features():
+    # spot_type=store → 1.0。
+    features = build_features({"distance_meters": 100, "spot_type": "store"}, _now(12))
+    assert features["spot_type_score"] == pytest.approx(1.0)
+    # spot_type 未取得でも壊れず既定値 0.6。
+    features = build_features({"distance_meters": 100}, _now(12))
+    assert features["spot_type_score"] == pytest.approx(0.6)

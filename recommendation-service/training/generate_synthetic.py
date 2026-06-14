@@ -73,6 +73,12 @@ def generate(n: int, seed: int) -> pd.DataFrame:
             "points": int(np.clip(rng.normal(600, 350), 0, 2500)),
             "active_load": int(rng.choice([0, 1, 2, 3, 4], p=[0.38, 0.30, 0.20, 0.09, 0.03])),
             "avg_rating": _sample_avg_rating(rng),
+            "spot_type": str(
+                rng.choice(
+                    ["store", "facility", "manager_room", "individual"],
+                    p=[0.40, 0.25, 0.20, 0.15],
+                )
+            ),
         }
         features = build_features(raw, now, capacity=3)
         rating = features["rating_score"]
@@ -91,6 +97,7 @@ def generate(n: int, seed: int) -> pd.DataFrame:
             + 0.10 * rating
             + 0.02 * features["is_weekend"] * features["day_match"]
             - 0.03 * features["is_evening"] * (1.0 - features["time_score"])
+            + 0.05 * features["spot_type_score"]
             + synergy
             + rating_penalty
         )
