@@ -183,6 +183,57 @@ export async function assignAgentToParcel(params: {
   return data
 }
 
+// 距離のみで絞った代理人候補一覧（曜日・時間帯フィルタなし）。受取人の選択UIで使用。
+export async function fetchAgentCandidates(params: {
+  latitude: number
+  longitude: number
+  radiusMeters?: number
+}): Promise<Array<{ user_id: string; full_name: string | null; distance_meters: number }>> {
+  const { data, error } = await supabase.rpc('get_recommendation_candidates', {
+    p_lat: params.latitude,
+    p_lng: params.longitude,
+    p_radius_m: params.radiusMeters ?? 5000,
+  })
+  if (error) throw error
+  return (data ?? []) as Array<{ user_id: string; full_name: string | null; distance_meters: number }>
+}
+
+// 代理人ホワイトリストを一括保存し、parcel を agent_assigned 状態に移行する。
+// 既存のホワイトリストは全削除してから再挿入（replace semantics）。
+export async function setAgentWhitelist(parcelId: string, agentIds: string[]): Promise<void> {
+  const { error: delErr } = await supabase
+    .from('parcel_agent_whitelist')
+    .delete()
+    .eq('parcel_id', parcelId)
+  if (delErr) throw delErr
+
+  if (agentIds.length > 0) {
+    const { error: insErr } = await supabase
+      .from('parcel_agent_whitelist')
+      .insert(agentIds.map((agentId, i) => ({ parcel_id: parcelId, agent_id: agentId, priority: i + 1 })))
+    if (insErr) throw insErr
+  }
+
+  const { error: statusErr } = await supabase
+    .from('parcels')
+    .update({ status: 'agent_assigned' })
+    .eq('id', parcelId)
+  if (statusErr) throw statusErr
+}
+
+// 荷物に設定されたホワイトリストを priority 順で取得する。
+export async function fetchParcelWhitelist(
+  parcelId: string,
+): Promise<{ agent_id: string; priority: number }[]> {
+  const { data, error } = await supabase
+    .from('parcel_agent_whitelist')
+    .select('agent_id, priority')
+    .eq('parcel_id', parcelId)
+    .order('priority', { ascending: true })
+  if (error) throw error
+  return data ?? []
+}
+
 // 注意: parcelId は呼び出し側で UUID 形式を保証すること（filter に文字列補間するため）。
 export function subscribeParcel(parcelId: string, onChange: () => void) {
   const channel = supabase

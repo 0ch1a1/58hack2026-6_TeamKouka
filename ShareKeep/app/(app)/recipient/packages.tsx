@@ -10,6 +10,10 @@ import {
   TextInput,
   Alert,
   ActivityIndicator,
+  KeyboardAvoidingView,
+  TouchableWithoutFeedback,
+  Keyboard,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
@@ -178,36 +182,47 @@ export default function PackagesScreen() {
       </View>
 
       <Modal visible={modalVisible} transparent animationType="slide">
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>荷物を登録</Text>
-            <Text style={styles.modalLabel}>伝票番号（任意）</Text>
-            <TextInput
-              style={styles.modalInput}
-              placeholder="例: 1234-5678-9012"
-              placeholderTextColor={colors.grayLight}
-              value={trackingInput}
-              onChangeText={setTrackingInput}
-              autoCapitalize="none"
-            />
-            <Text style={styles.modalHint}>※ 受付番号は登録時に自動で採番されます。</Text>
-            <View style={styles.modalButtons}>
-              <TouchableOpacity
-                style={styles.modalCancel}
-                onPress={() => { setModalVisible(false); setTrackingInput(''); }}
-              >
-                <Text style={styles.modalCancelText}>キャンセル</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.modalSubmit} onPress={handleRegister} disabled={registering}>
-                {registering ? (
-                  <ActivityIndicator color={colors.white} />
-                ) : (
-                  <Text style={styles.modalSubmitText}>登録する</Text>
-                )}
-              </TouchableOpacity>
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
+          <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+            <View style={styles.modalOverlay}>
+              <TouchableWithoutFeedback>
+                <View style={styles.modalContent}>
+                  <Text style={styles.modalTitle}>荷物を登録</Text>
+                  <Text style={styles.modalLabel}>伝票番号（任意）</Text>
+                  <TextInput
+                    style={styles.modalInput}
+                    placeholder="例: 1234-5678-9012"
+                    placeholderTextColor={colors.grayLight}
+                    value={trackingInput}
+                    onChangeText={setTrackingInput}
+                    autoCapitalize="none"
+                    returnKeyType="done"
+                    onSubmitEditing={Keyboard.dismiss}
+                  />
+                  <Text style={styles.modalHint}>※ 受付番号は登録時に自動で採番されます。</Text>
+                  <View style={styles.modalButtons}>
+                    <TouchableOpacity
+                      style={styles.modalCancel}
+                      onPress={() => { Keyboard.dismiss(); setModalVisible(false); setTrackingInput(''); }}
+                    >
+                      <Text style={styles.modalCancelText}>キャンセル</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.modalSubmit} onPress={handleRegister} disabled={registering}>
+                      {registering ? (
+                        <ActivityIndicator color={colors.white} />
+                      ) : (
+                        <Text style={styles.modalSubmitText}>登録する</Text>
+                      )}
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </TouchableWithoutFeedback>
             </View>
-          </View>
-        </View>
+          </TouchableWithoutFeedback>
+        </KeyboardAvoidingView>
       </Modal>
     </SafeAreaView>
   );

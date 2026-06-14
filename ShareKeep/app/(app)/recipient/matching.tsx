@@ -6,31 +6,26 @@ import {
   SafeAreaView,
   ScrollView,
   TouchableOpacity,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams } from 'expo-router';
 import { colors } from '../../../lib/theme';
 import { ScreenHeader, Card, PrimaryButton } from '../../../components/ui';
-import { type RecommendedAgent, type ExcludedAgent, type SpotType } from '../../../features/recommend';
+import { type RecommendedAgent, type SpotType } from '../../../features/recommend';
 import { useMatchingLogic } from './useMatchingLogic';
 import { LoadingDots } from './LoadingDots';
-// 機能④⑤: スコア内訳バーへの集約とプライバシー段階開示の表示ユーティリティ（AgentCard で使用）。
 import { factorsFromBreakdown, type ScoreFactors } from '../../../lib/scoring';
 import { discloseAddress } from '../../../lib/geo';
-// 機能7': 代理人の顔写真（任意・未設定可）。候補カードに信頼シグナルとして表示。
 import { getAgentAvatarUrls } from '../../../features/avatar';
 import { Avatar } from '../../../components/Avatar';
 
-// 因子バーの表示定義。feature-ideas.md「スコア関数の定義」の 3 因子（時間帯 T / 距離 D / 実績 R）に対応。
-// recommendation-api の breakdown（多数の特徴量）は factorsFromBreakdown でこの 3 因子に集約する。
-// 断定表現は禁止（「対応しやすい」等の柔らかい表現に統一）。
 const FACTOR_BARS: { key: keyof ScoreFactors; label: string }[] = [
-  { key: 'distance', label: '近さ' },
+  { key: 'distance',     label: '近さ' },
   { key: 'availability', label: '対応しやすい時間帯' },
-  { key: 'reliability', label: '実績' },
+  { key: 'reliability',  label: '実績' },
 ];
 
-// 受け渡し先スポット種別 → 日本語ラベル。旧 API で spot_type が欠落した場合は null（バッジ非表示）。
 const SPOT_TYPE_LABELS: Record<SpotType, string> = {
   store: '店舗',
   facility: '施設',
@@ -43,9 +38,7 @@ function spotTypeLabel(spotType: SpotType | undefined): string | null {
   return SPOT_TYPE_LABELS[spotType] ?? null;
 }
 
-// 距離（メートル）を「150m」「1.2km」形式に整形。カードと除外セクションで共用。
 function formatDistance(meters: number): string {
-  // distance_meters 欠落時に "NaNm" を出さないよう非有限値をガード。
   if (!Number.isFinite(meters)) return '距離不明';
   return meters >= 1000
     ? `${(meters / 1000).toFixed(1)}km`
@@ -53,49 +46,45 @@ function formatDistance(meters: number): string {
 }
 
 export default function MatchingScreen() {
-  const { parcelId, trackingNumber } = useLocalSearchParams<{
-    parcelId: string;
-    trackingNumber: string;
-  }>();
+  const { parcelId } = useLocalSearchParams<{ parcelId: string; trackingNumber: string }>();
 
-  const { mode, candidates, excluded, selectedId, assigning, selectAgent, confirmSelection } =
+  const { mode, candidates, selectedIds, saving, toggleAgent, moveUp, moveDown, confirmWhitelist } =
     useMatchingLogic(parcelId);
 
-  // ===== 選択 UI（推薦サービスが候補を返したとき）=====
   if (mode === 'select') {
     return (
       <SelectView
         candidates={candidates}
-        excluded={excluded}
-        selectedId={selectedId}
-        assigning={assigning}
-        onSelect={selectAgent}
-        onConfirm={confirmSelection}
+        selectedIds={selectedIds}
+        saving={saving}
+        onToggle={toggleAgent}
+        onMoveUp={moveUp}
+        onMoveDown={moveDown}
+        onConfirm={confirmWhitelist}
       />
     );
   }
 
-  // ===== 待機 / ローディング（自動マッチ・割り当て後）=====
-  return <WaitingView mode={mode} trackingNumber={trackingNumber} />;
+  return <LoadingView />;
 }
 
-// 候補をスコア順に並べて選んでもらう画面。
 function SelectView({
   candidates,
-  excluded,
-  selectedId,
-  assigning,
-  onSelect,
+  selectedIds,
+  saving,
+  onToggle,
+  onMoveUp,
+  onMoveDown,
   onConfirm,
 }: {
   candidates: RecommendedAgent[];
-  excluded: ExcludedAgent[];
-  selectedId: string | null;
-  assigning: boolean;
-  onSelect: (agentId: string) => void;
+  selectedIds: string[];
+  saving: boolean;
+  onToggle: (agentId: string) => void;
+  onMoveUp: (agentId: string) => void;
+  onMoveDown: (agentId: string) => void;
   onConfirm: () => void;
 }) {
-  // 機能7': 候補代理人の顔写真（署名URL）を一括取得。未設定の代理人は含まれない。
   const [avatarUrls, setAvatarUrls] = useState<Record<string, string>>({});
   useEffect(() => {
     let active = true;
@@ -103,7 +92,7 @@ function SelectView({
     if (ids.length === 0) return;
     getAgentAvatarUrls(ids)
       .then((map) => { if (active) setAvatarUrls(map); })
-      .catch(() => { /* 取得失敗時はプレースホルダ表示で継続 */ });
+      .catch(() => {});
     return () => { active = false; };
   }, [candidates]);
 
@@ -111,147 +100,162 @@ function SelectView({
     <SafeAreaView style={styles.safe}>
       <ScreenHeader title="代理人を選ぶ" />
       <ScrollView contentContainerStyle={styles.listContent}>
-        <Text style={styles.selectIntro}>
-          おすすめ順に表示しています。{'\n'}預ける代理人を選んでください。
+        <Text style={styles.intro}>
+          預けてもいい代理人を複数選択してください。{'\n'}
+          上にいる代理人ほど配達員に優先的に表示されます。
         </Text>
-        {candidates.map((agent) => (
-          <AgentCard
-            key={agent.agent_id}
-            agent={agent}
-            avatarUrl={avatarUrls[agent.agent_id] ?? null}
-            selected={agent.agent_id === selectedId}
-            onSelect={() => onSelect(agent.agent_id)}
-          />
-        ))}
 
-        {/* 除外された候補（フィルタで絞り込まれた理由を開示）。0 件なら非表示。 */}
-        {excluded.length > 0 && (
-          <View style={styles.excludedSection}>
-            <Text style={styles.excludedTitle}>除外された候補</Text>
-            {excluded.map((item) => (
-              <Text key={item.agent_id} style={styles.excludedItem}>
-                {(item.full_name ?? '代理人')} ・ {formatDistance(item.distance_meters)} ・ {item.reason}
-              </Text>
-            ))}
+        {/* 選択中のホワイトリスト（優先度表示）*/}
+        {selectedIds.length > 0 && (
+          <View style={styles.whitelistSection}>
+            <View style={styles.whitelistHeader}>
+              <Ionicons name="list-outline" size={16} color={colors.green} />
+              <Text style={styles.whitelistTitle}>選択中のホワイトリスト（優先度順）</Text>
+            </View>
+            {selectedIds.map((id, idx) => {
+              const agent = candidates.find((c) => c.agent_id === id);
+              if (!agent) return null;
+              return (
+                <View key={id} style={styles.whitelistRow}>
+                  <View style={styles.priorityBadge}>
+                    <Text style={styles.priorityText}>{idx + 1}</Text>
+                  </View>
+                  <Avatar uri={avatarUrls[id] ?? null} name={agent.full_name} size={28} />
+                  <Text style={styles.whitelistName} numberOfLines={1}>
+                    {agent.full_name ?? '代理人'}
+                  </Text>
+                  <View style={styles.orderButtons}>
+                    <TouchableOpacity
+                      onPress={() => onMoveUp(id)}
+                      disabled={idx === 0}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    >
+                      <Ionicons
+                        name="chevron-up"
+                        size={20}
+                        color={idx === 0 ? colors.grayLight : colors.green}
+                      />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={() => onMoveDown(id)}
+                      disabled={idx === selectedIds.length - 1}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    >
+                      <Ionicons
+                        name="chevron-down"
+                        size={20}
+                        color={idx === selectedIds.length - 1 ? colors.grayLight : colors.green}
+                      />
+                    </TouchableOpacity>
+                  </View>
+                  <TouchableOpacity onPress={() => onToggle(id)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                    <Ionicons name="close-circle" size={20} color={colors.grayLight} />
+                  </TouchableOpacity>
+                </View>
+              );
+            })}
           </View>
         )}
+
+        {/* 候補一覧 */}
+        <Text style={styles.sectionLabel}>候補一覧</Text>
+        {candidates.map((agent) => {
+          const priority = selectedIds.indexOf(agent.agent_id);
+          return (
+            <AgentCard
+              key={agent.agent_id}
+              agent={agent}
+              avatarUrl={avatarUrls[agent.agent_id] ?? null}
+              priority={priority >= 0 ? priority + 1 : null}
+              onToggle={() => onToggle(agent.agent_id)}
+            />
+          );
+        })}
       </ScrollView>
+
       <View style={styles.footer}>
-        <PrimaryButton
-          label="この代理人に預ける"
-          icon="checkmark-circle-outline"
-          onPress={onConfirm}
-          loading={assigning}
-          disabled={!selectedId}
-        />
+        {saving ? (
+          <ActivityIndicator color={colors.green} />
+        ) : (
+          <PrimaryButton
+            label={
+              selectedIds.length > 0
+                ? `${selectedIds.length}人をホワイトリストに設定する`
+                : '代理人を選択してください'
+            }
+            icon="checkmark-circle-outline"
+            onPress={onConfirm}
+            disabled={selectedIds.length === 0}
+          />
+        )}
       </View>
     </SafeAreaView>
   );
 }
 
-// 自動マッチ中・割り当て後の待機画面。
-function WaitingView({
-  mode,
-  trackingNumber,
-}: {
-  mode: 'loading' | 'waiting';
-  trackingNumber?: string;
-}) {
-  return (
-    <SafeAreaView style={styles.safe}>
-      <ScreenHeader title="マッチング中" />
-
-      <View style={styles.body}>
-        <View style={styles.iconWrap}>
-          <Ionicons name="people-outline" size={64} color={colors.green} />
-        </View>
-
-        <Text style={styles.title}>
-          {mode === 'loading' ? '近くの代理人を探しています' : '代理人を手配しています'}
-        </Text>
-        <Text style={styles.desc}>
-          近くの代理人が見つかり次第、{'\n'}荷物を届けに向かいます。
-        </Text>
-
-        <LoadingDots />
-
-        <Card style={styles.card}>
-          <View style={styles.cardRow}>
-            <Ionicons name="barcode-outline" size={16} color={colors.green} />
-            <Text style={styles.cardLabel}>追跡番号</Text>
-            <Text style={styles.cardValue}>{trackingNumber ?? '—'}</Text>
-          </View>
-        </Card>
-
-        <Text style={styles.note}>
-          代理人が決まると自動的に次の画面に進みます。{'\n'}このままお待ちいただくか、アプリを閉じても大丈夫です。
-        </Text>
-      </View>
-    </SafeAreaView>
-  );
-}
-
-// 候補1件のカード。総合スコア・選択状態・3 因子バー（距離/対応時間/実績）・理由を表示。
 function AgentCard({
   agent,
   avatarUrl,
-  selected,
-  onSelect,
+  priority,
+  onToggle,
 }: {
   agent: RecommendedAgent;
   avatarUrl: string | null;
-  selected: boolean;
-  onSelect: () => void;
+  priority: number | null; // null=未選択、数値=優先度（1始まり）
+  onToggle: () => void;
 }) {
+  const selected = priority !== null;
   const distanceLabel = formatDistance(agent.distance_meters);
-
-  // 受け渡し先スポット種別の日本語ラベル（旧 API で欠落時は null → バッジ非表示）。
   const spotLabel = spotTypeLabel(agent.spot_type);
 
-  // breakdown（特徴量名→0–1）を 3 因子に集約してバー表示（lib/scoring.ts と同じ語彙）。
   const factors = factorsFromBreakdown(agent.breakdown);
-  // 総合スコアは推薦サービスの score（0–1 の確率）を 0–100 点に換算して表示。
-  // ※ score をそのまま丸めると 0.87 が「1点」になる不具合になるため必ず ×100 する。
   const totalScore = Math.round(Math.max(0, Math.min(100, agent.score * 100)));
-
-  // プライバシー段階開示（確定前）。候補一覧では詳細住所は出さず概略のみ。
-  // RecommendedAgent は住所を持たないため roundedLabel は距離ベースの概略にする。
-  // k-匿名性は保証しない（lib/geo.ts のコメント参照）。確定後は詳細を別画面で開示。
-  const areaLabel = discloseAddress({
-    stage: 'before',
-    detailAddress: null,
-    roundedLabel: `${distanceLabel} ほど先のエリア`,
-  });
+  const areaLabel = distanceLabel
+    ? discloseAddress({ stage: 'before', detailAddress: null, roundedLabel: `${distanceLabel} ほど先のエリア` })
+    : null;
 
   return (
-    <TouchableOpacity activeOpacity={0.8} onPress={onSelect}>
+    <TouchableOpacity activeOpacity={0.8} onPress={onToggle}>
       <Card style={[styles.agentCard, selected && styles.agentCardSelected]}>
         <View style={styles.agentHeader}>
-          <View style={styles.rankBadge}>
-            <Text style={styles.rankText}>{agent.rank}</Text>
-          </View>
-          {/* 機能7': 代理人の顔写真。未設定なら頭文字プレースホルダ。 */}
+          {/* 選択済みなら優先度バッジ、未選択ならレコメンド順バッジ */}
+          {selected ? (
+            <View style={styles.priorityBadgeLarge}>
+              <Text style={styles.priorityTextLarge}>{priority}</Text>
+            </View>
+          ) : (
+            <View style={styles.rankBadge}>
+              <Text style={styles.rankText}>{agent.rank}</Text>
+            </View>
+          )}
+
           <Avatar uri={avatarUrl} name={agent.full_name} size={40} />
+
           <View style={styles.agentNameWrap}>
             <Text style={styles.agentName}>{agent.full_name ?? '代理人'}</Text>
-            <View style={styles.agentMetaRow}>
-              <Ionicons name="location-outline" size={13} color={colors.gray} />
-              <Text style={styles.agentMeta}>{areaLabel}</Text>
+            {areaLabel && (
+              <View style={styles.agentMetaRow}>
+                <Ionicons name="location-outline" size={13} color={colors.gray} />
+                <Text style={styles.agentMeta}>{areaLabel}</Text>
+              </View>
+            )}
+          </View>
+
+          {totalScore > 0 && (
+            <View style={styles.scoreWrap}>
+              <Text style={styles.scoreValue}>{totalScore}</Text>
+              <Text style={styles.scoreUnit}>点</Text>
             </View>
-          </View>
-          <View style={styles.scoreWrap}>
-            <Text style={styles.scoreValue}>{totalScore}</Text>
-            <Text style={styles.scoreUnit}>点</Text>
-          </View>
+          )}
+
           <Ionicons
-            name={selected ? 'checkmark-circle' : 'ellipse-outline'}
-            size={24}
+            name={selected ? 'checkbox' : 'square-outline'}
+            size={26}
             color={selected ? colors.green : colors.grayLight}
           />
         </View>
 
-        {/* 受け渡し先スポット情報（種別バッジ・空き枠・受け取り時間帯）。拡張前 API では各値が
-            欠落しうるため、存在するものだけ描画する。 */}
+        {/* 受け渡し先スポット情報（種別バッジ・空き枠・受け取り時間帯）*/}
         {(spotLabel || agent.capacity_label || agent.pickup_window_label) && (
           <View style={styles.spotInfo}>
             {spotLabel && (
@@ -274,22 +278,23 @@ function AgentCard({
           </View>
         )}
 
-        {/* スコア内訳（3 因子の横バー）。断定せず「対応しやすさ」の目安として表示。 */}
-        <View style={styles.breakdown}>
-          {FACTOR_BARS.map(({ key, label }) => {
-            const value = Math.max(0, Math.min(1, factors[key]));
-            return (
-              <View key={key} style={styles.barRow}>
-                <Text style={styles.barLabel}>{label}</Text>
-                <View style={styles.barTrack}>
-                  <View style={[styles.barFill, { width: `${value * 100}%` }]} />
+        {/* スコア内訳バー（スコアがある場合のみ） */}
+        {agent.score > 0 && (
+          <View style={styles.breakdown}>
+            {FACTOR_BARS.map(({ key, label }) => {
+              const value = Math.max(0, Math.min(1, factors[key]));
+              return (
+                <View key={key} style={styles.barRow}>
+                  <Text style={styles.barLabel}>{label}</Text>
+                  <View style={styles.barTrack}>
+                    <View style={[styles.barFill, { width: `${value * 100}%` }]} />
+                  </View>
                 </View>
-              </View>
-            );
-          })}
-        </View>
+              );
+            })}
+          </View>
+        )}
 
-        {/* 理由タグ */}
         {agent.reasons.length > 0 && (
           <View style={styles.reasons}>
             {agent.reasons.map((reason, i) => (
@@ -304,26 +309,52 @@ function AgentCard({
   );
 }
 
+function LoadingView() {
+  return (
+    <SafeAreaView style={styles.safe}>
+      <ScreenHeader title="代理人を探しています" />
+      <View style={styles.body}>
+        <View style={styles.iconWrap}>
+          <Ionicons name="people-outline" size={64} color={colors.green} />
+        </View>
+        <Text style={styles.loadingTitle}>近くの代理人を探しています</Text>
+        <LoadingDots />
+      </View>
+    </SafeAreaView>
+  );
+}
+
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
+
+  // ローディング
   body: { flex: 1, alignItems: 'center', paddingHorizontal: 24, paddingTop: 48, gap: 20 },
   iconWrap: { width: 112, height: 112, borderRadius: 56, backgroundColor: colors.greenLight, alignItems: 'center', justifyContent: 'center' },
-  title: { fontSize: 22, fontWeight: '700', color: colors.ink, textAlign: 'center' },
-  desc: { fontSize: 15, color: colors.gray, textAlign: 'center', lineHeight: 24 },
-  card: { width: '100%', gap: 0 },
-  cardRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  cardLabel: { fontSize: 13, color: colors.gray, width: 72 },
-  cardValue: { flex: 1, fontSize: 14, fontWeight: '600', color: colors.ink },
-  note: { fontSize: 13, color: colors.grayLight, textAlign: 'center', lineHeight: 20 },
+  loadingTitle: { fontSize: 20, fontWeight: '700', color: colors.ink, textAlign: 'center' },
 
   // 選択 UI
   listContent: { padding: 16, paddingBottom: 24, gap: 12 },
-  selectIntro: { fontSize: 14, color: colors.gray, lineHeight: 22, marginBottom: 4 },
+  intro: { fontSize: 14, color: colors.gray, lineHeight: 22 },
+  sectionLabel: { fontSize: 13, fontWeight: '700', color: colors.gray, marginTop: 4 },
+
+  // ホワイトリストプレビュー
+  whitelistSection: { backgroundColor: colors.greenLight, borderRadius: 14, padding: 12, gap: 8 },
+  whitelistHeader: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  whitelistTitle: { fontSize: 13, fontWeight: '700', color: colors.green },
+  whitelistRow: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: colors.white, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 8 },
+  whitelistName: { flex: 1, fontSize: 14, fontWeight: '600', color: colors.ink },
+  orderButtons: { flexDirection: 'row', gap: 4 },
+  priorityBadge: { width: 24, height: 24, borderRadius: 12, backgroundColor: colors.green, alignItems: 'center', justifyContent: 'center' },
+  priorityText: { fontSize: 12, fontWeight: '800', color: colors.white },
+
+  // 候補カード
   agentCard: { gap: 12, borderWidth: 2, borderColor: 'transparent' },
   agentCardSelected: { borderColor: colors.green },
-  agentHeader: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  agentHeader: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   rankBadge: { width: 28, height: 28, borderRadius: 14, backgroundColor: colors.greenLight, alignItems: 'center', justifyContent: 'center' },
   rankText: { fontSize: 14, fontWeight: '700', color: colors.green },
+  priorityBadgeLarge: { width: 28, height: 28, borderRadius: 14, backgroundColor: colors.green, alignItems: 'center', justifyContent: 'center' },
+  priorityTextLarge: { fontSize: 14, fontWeight: '800', color: colors.white },
   agentNameWrap: { flex: 1, gap: 2 },
   agentName: { fontSize: 16, fontWeight: '700', color: colors.ink },
   agentMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
@@ -337,19 +368,15 @@ const styles = StyleSheet.create({
   barTrack: { flex: 1, height: 8, borderRadius: 4, backgroundColor: colors.fieldBg, overflow: 'hidden' },
   barFill: { height: 8, borderRadius: 4, backgroundColor: colors.green },
   reasons: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-  reasonChip: { backgroundColor: colors.greenPale, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
+  reasonChip: { backgroundColor: colors.greenPale ?? colors.greenLight, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
   reasonText: { fontSize: 12, fontWeight: '600', color: colors.green },
+
   footer: { padding: 16, borderTopWidth: 1, borderTopColor: colors.border, backgroundColor: colors.bg },
 
-  // 受け渡し先スポット情報（種別バッジ＋空き枠＋受け取り時間帯）
+  // 受け渡し先スポット情報
   spotInfo: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 10 },
   spotBadge: { backgroundColor: colors.greenLight, paddingHorizontal: 10, paddingVertical: 3, borderRadius: 10 },
   spotBadgeText: { fontSize: 12, fontWeight: '700', color: colors.green },
   spotMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   spotMeta: { fontSize: 12, color: colors.gray },
-
-  // 除外された候補セクション（補足情報として控えめに表示）
-  excludedSection: { marginTop: 8, paddingTop: 12, borderTopWidth: 1, borderTopColor: colors.border, gap: 6 },
-  excludedTitle: { fontSize: 13, fontWeight: '700', color: colors.grayLight },
-  excludedItem: { fontSize: 12, color: colors.grayLight, lineHeight: 18 },
 });

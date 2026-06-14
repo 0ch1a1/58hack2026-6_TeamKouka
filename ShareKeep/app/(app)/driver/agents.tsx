@@ -15,7 +15,7 @@ import { DriverAgentMap } from '../../../components/DriverAgentMap';
 import { colors, radius, spacing } from '../../../lib/theme';
 import { FALLBACK_LOCATION } from '../../../lib/constants';
 import { ScreenHeader, Card, InfoRow, EmptyState, MapFallback } from '../../../components/ui';
-import { getAgentLocations, assignAgentToParcel } from '../../../features/parcels';
+import { getAgentLocations, assignAgentToParcel, fetchParcelWhitelist } from '../../../features/parcels';
 import { logError } from '../../../lib/logger';
 
 // getAgentLocations() の戻り要素の型（features/parcels の戻り値を参照）。
@@ -81,6 +81,7 @@ export default function DriverAgentsScreen() {
   // Expo Router の search param は配列で返ることがあるため string に正規化。
   const parcelId = typeof rawParcelId === 'string' && rawParcelId.length > 0 ? rawParcelId : undefined;
   const [agents, setAgents] = useState<AgentLocation[]>([]);
+  const [whitelist, setWhitelist] = useState<{ agent_id: string; priority: number }[]>([]);
   const [loading, setLoading] = useState(true);
   const [assigningId, setAssigningId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -116,6 +117,8 @@ export default function DriverAgentsScreen() {
   useEffect(() => {
     if (!parcelId) return;
     loadAgents();
+    // ホワイトリストを取得。設定されていない荷物では空配列になる（エラーは無視）。
+    fetchParcelWhitelist(parcelId).then(setWhitelist).catch(() => {});
   }, [parcelId, loadAgents]);
 
   // 代理人群の重心。なければ先頭、それも無ければ東京駅フォールバック。
@@ -183,11 +186,23 @@ export default function DriverAgentsScreen() {
     [doAssign],
   );
 
-  const mapAgents = agents.filter(hasValidCoords);
+  // ホワイトリストがある場合はその順序で絞り込み、ない場合は全件表示。
+  const hasWhitelist = whitelist.length > 0;
+  const displayAgents: (AgentLocation & { whitelistPriority?: number })[] = hasWhitelist
+    ? whitelist
+        .map((w) => {
+          const agent = agents.find((a) => a.user_id === w.agent_id);
+          return agent ? { ...agent, whitelistPriority: w.priority } : null;
+        })
+        .filter((a): a is AgentLocation & { whitelistPriority: number } => a !== null)
+    : agents;
 
-  const renderAgent = ({ item }: { item: AgentLocation }) => {
+  const mapAgents = displayAgents.filter(hasValidCoords);
+
+  const renderAgent = ({ item }: { item: typeof displayAgents[number] }) => {
     const selected = item.user_id === selectedId;
     const busy = assigningId === item.user_id;
+    const priority = 'whitelistPriority' in item ? item.whitelistPriority : undefined;
     return (
       <Card style={[styles.agentCard, selected && styles.agentCardSelected]}>
         <View style={styles.cardHeader}>
@@ -195,9 +210,16 @@ export default function DriverAgentsScreen() {
             <Ionicons name="person-circle-outline" size={20} color={colors.driver} />
             <Text style={styles.agentName}>{item.full_name}</Text>
           </View>
-          <View style={styles.levelBadge}>
-            <Ionicons name="star" size={12} color={colors.driver} />
-            <Text style={styles.levelText}>{formatLevel(item.level)}</Text>
+          <View style={styles.badgeRow}>
+            {priority !== undefined && (
+              <View style={styles.priorityBadge}>
+                <Text style={styles.priorityText}>優先度 {priority}</Text>
+              </View>
+            )}
+            <View style={styles.levelBadge}>
+              <Ionicons name="star" size={12} color={colors.driver} />
+              <Text style={styles.levelText}>{formatLevel(item.level)}</Text>
+            </View>
           </View>
         </View>
 
@@ -242,13 +264,20 @@ export default function DriverAgentsScreen() {
         />
       ) : (
         <FlatList
-          data={agents}
+          data={displayAgents}
           keyExtractor={(item) => item.user_id}
           renderItem={renderAgent}
           contentContainerStyle={styles.listContent}
-          // 地図は補助。地図領域はリストのヘッダーに置き、描画失敗時はリストだけで機能する。
           ListHeaderComponent={
             <View style={styles.mapSection}>
+              {hasWhitelist && (
+                <View style={styles.whitelistBanner}>
+                  <Ionicons name="shield-checkmark-outline" size={14} color={colors.green} />
+                  <Text style={styles.whitelistBannerText}>
+                    受取人が設定したホワイトリストの代理人のみ表示しています
+                  </Text>
+                </View>
+              )}
               {!mapFailed && mapAgents.length > 0 ? (
                 <DriverAgentMap
                   region={initialRegion}
@@ -283,6 +312,11 @@ const styles = StyleSheet.create({
   cardHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, flex: 1 },
   agentName: { fontSize: 15, fontWeight: '700', color: colors.ink },
+  badgeRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
+  whitelistBanner: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: colors.greenLight, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10 },
+  whitelistBannerText: { flex: 1, fontSize: 12, fontWeight: '600', color: colors.green },
+  priorityBadge: { backgroundColor: colors.green, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10 },
+  priorityText: { fontSize: 11, fontWeight: '700', color: colors.white },
   levelBadge: {
     flexDirection: 'row',
     alignItems: 'center',

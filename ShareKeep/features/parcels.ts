@@ -33,6 +33,9 @@ export {
   upsertRecipientProfile,
   fetchRecipientHome,
   fetchRecipientCoordinates,
+  setAgentWhitelist,
+  fetchParcelWhitelist,
+  fetchAgentCandidates,
 } from './parcels-recipient'
 
 // 配達員（delivery_company）向け API
