@@ -13,7 +13,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
 import { colors, cardShadow, radius, spacing } from '../../../lib/theme';
-import { Card, InfoRow, StatusBadge, EmptyState, QuestStatusBar } from '../../../components/ui';
+import { Card, InfoRow, StatusBadge, EmptyState, QuestStatusBar, ScreenHeader } from '../../../components/ui';
 import {
   fetchDriverParcels,
   startDelivery,
@@ -147,15 +147,13 @@ export default function DriverHomeScreen() {
 
   return (
     <SafeAreaView style={styles.safe}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>配達員ホーム</Text>
-        <View style={styles.headerRight}>
-          <NotificationBell color={colors.driver} />
-          <TouchableOpacity onPress={handleSignOut} style={styles.signOutButton} accessibilityLabel="ログアウト">
-            <Ionicons name="log-out-outline" size={20} color={colors.gray} />
-            <Text style={styles.signOutText}>ログアウト</Text>
-          </TouchableOpacity>
-        </View>
+      <ScreenHeader title="配達員ホーム" />
+      <View style={styles.headerActions}>
+        <NotificationBell color={colors.driver} />
+        <TouchableOpacity onPress={handleSignOut} style={styles.signOutButton} accessibilityLabel="ログアウト">
+          <Ionicons name="log-out-outline" size={20} color={colors.gray} />
+          <Text style={styles.signOutText}>ログアウト</Text>
+        </TouchableOpacity>
       </View>
 
       {loading ? (
@@ -262,16 +260,14 @@ function ActionButton({
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
-  header: {
+  headerActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-end',
+    gap: spacing.md,
     paddingHorizontal: spacing.lg,
-    paddingTop: spacing.md,
     paddingBottom: spacing.sm,
   },
-  headerTitle: { fontSize: 18, fontWeight: '700', color: colors.ink },
-  headerRight: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   signOutButton: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, paddingVertical: spacing.xs },
   signOutText: { fontSize: 13, fontWeight: '600', color: colors.gray },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.md, padding: spacing.xl },
