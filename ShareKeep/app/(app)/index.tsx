@@ -4,21 +4,25 @@ import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import TreeScene from '../../components/TreeScene';
 import { colors } from '../../lib/theme';
-import { XP_LEVEL_THRESHOLDS } from '../../lib/constants';
 import { Card } from '../../components/ui';
 import { RegionalContributionCard } from '../../components/RegionalContributionCard';
 import { NotificationBell } from '../../components/NotificationBell';
 import { getMyRole, signOut } from '../../features/auth';
+import { supabase } from '../../lib/supabase';
 
 type Mode = 'recipient' | 'agent';
 
-// XP からステージを算出（後でSupabaseのuser.xpと接続）
-// しきい値（XP_LEVEL_THRESHOLDS）未満となる最初の index がステージ。
-// いずれも満たさなければ最終ステージ（= しきい値の数）。
-function xpToStage(xp: number): number {
-  const stage = XP_LEVEL_THRESHOLDS.findIndex((threshold) => xp < threshold);
-  return stage === -1 ? XP_LEVEL_THRESHOLDS.length : stage;
-}
+type AgentStats = {
+  level: number;
+  points: number;
+  completedDeliveries: number;
+};
+
+const EMPTY_AGENT_STATS: AgentStats = {
+  level: 0,
+  points: 0,
+  completedDeliveries: 0,
+};
 
 const STAGE_LABELS = ['芽吹き', '若木', '成木', '大木', '実りの木'];
 
@@ -26,6 +30,7 @@ export default function HomeScreen() {
   const [mode, setMode] = useState<Mode>('recipient');
   // ロール判定中は受取人/代理人ホームを描かずスピナーを出す（配達員はここで /driver へ送る）。
   const [roleChecked, setRoleChecked] = useState(false);
+  const [agentStats, setAgentStats] = useState<AgentStats>(EMPTY_AGENT_STATS);
 
   useEffect(() => {
     let active = true;
@@ -46,10 +51,44 @@ export default function HomeScreen() {
     };
   }, []);
 
-  // TODO: Supabase から取得した xp・points に差し替え
-  const xp = 0;
-  const points = 0;
-  const stage = xpToStage(xp);
+  useEffect(() => {
+    let active = true;
+
+    const fetchAgentStats = async () => {
+      if (mode !== 'agent') {
+        setAgentStats(EMPTY_AGENT_STATS);
+        return;
+      }
+
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        if (active) setAgentStats(EMPTY_AGENT_STATS);
+        return;
+      }
+
+      const { data } = await supabase
+        .from('agent_profiles')
+        .select('points, level, completed_deliveries')
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+      if (!active) return;
+
+      setAgentStats({
+        level: data?.level ?? 0,
+        points: data?.points ?? 0,
+        completedDeliveries: data?.completed_deliveries ?? 0,
+      });
+    };
+
+    fetchAgentStats();
+
+    return () => {
+      active = false;
+    };
+  }, [mode]);
+
+  const stage = Math.max(0, Math.min(STAGE_LABELS.length - 1, agentStats.level - 1));
 
   const handleSignOut = useCallback(async () => {
     try {
@@ -76,9 +115,9 @@ export default function HomeScreen() {
           <Text style={styles.appName}> ShareKeep</Text>
         </View>
         <View style={styles.statsRow}>
-          <Text style={styles.statText}>XP {xp}</Text>
+          <Text style={styles.statText}>Lv {agentStats.level}</Text>
           <Text style={styles.statDivider}>|</Text>
-          <Text style={styles.statText}>P {points}</Text>
+          <Text style={styles.statText}>P {agentStats.points}</Text>
           <NotificationBell color={colors.green} />
           <TouchableOpacity onPress={handleSignOut} style={styles.signOutButton} accessibilityLabel="ログアウト">
             <Ionicons name="log-out-outline" size={20} color={colors.gray} />
