@@ -85,6 +85,19 @@ export default function AgentProfileScreen() {
     );
   };
 
+  // "9" → "09:00"、"900" → "09:00"、"9:00" → "09:00" など HH:MM 形式に正規化
+  const normalizeTime = (val: string): string => {
+    const digits = val.replace(/\D/g, '');
+    if (digits.length <= 2) {
+      const h = digits.padStart(2, '0');
+      return `${h}:00`;
+    }
+    if (digits.length === 3) {
+      return `0${digits[0]}:${digits.slice(1)}`;
+    }
+    return `${digits.slice(0, 2)}:${digits.slice(2, 4)}`;
+  };
+
   const handleSave = async () => {
     // 郵便番号はジオコ精度向上のための任意入力。保存後は address（display_name）に
     // 畳まれ再表示時に復元できないため、必須にすると既存代理人の再保存を妨げる。住所のみ必須。
@@ -127,8 +140,8 @@ export default function AgentProfileScreen() {
         address: geocodeAddress,
         addressDetail: trimmedRoomNumber || undefined,
         availableDays: selectedDays,
-        startTime: timeFrom,
-        endTime: timeTo,
+        startTime: normalizeTime(timeFrom),
+        endTime: normalizeTime(timeTo),
       });
     } catch (err) {
       setSaving(false);
