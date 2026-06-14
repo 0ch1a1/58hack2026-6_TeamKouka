@@ -162,7 +162,7 @@ export default function AgentProfileScreen() {
 
   return (
     <SafeAreaView style={styles.safe}>
-      <ScreenHeader title="代理人プロファイル" />
+      <ScreenHeader title="代理受取スポットプロファイル" />
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         <Card>

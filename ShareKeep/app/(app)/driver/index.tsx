@@ -226,8 +226,8 @@ const ACTION_META: Record<
 > = {
   start: { label: '配達開始', icon: 'play-outline' },
   fail: { label: '不在報告', icon: 'alert-circle-outline' },
-  match: { label: '代理人を探す', icon: 'people-outline' },
-  scan: { label: '代理人QRを読む', icon: 'scan-outline' },
+  match: { label: '代理受取スポットを探す', icon: 'people-outline' },
+  scan: { label: '受取スポットのQRを読む', icon: 'scan-outline' },
 };
 
 function ActionButton({

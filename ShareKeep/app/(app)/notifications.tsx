@@ -29,7 +29,7 @@ const FIXED_FILTERS: { key: FilterKey; label: string }[] = [{ key: 'all', label:
 // notification_type → 日本語ラベル（未知の type はそのまま表示）。
 const TYPE_LABEL: Record<string, string> = {
   parcel_status: 'ステータス',
-  agent_assigned: '代理人',
+  agent_assigned: '受取スポット',
   delivery_failed: '不在',
   handed_to_recipient: '受け渡し',
   completed: '完了',

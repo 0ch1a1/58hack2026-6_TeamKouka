@@ -140,7 +140,7 @@ export default function DriverScanScreen() {
   if (!permission) {
     return (
       <SafeAreaView style={styles.safe}>
-        <ScreenHeader title="代理人QRを読む" />
+        <ScreenHeader title="受取スポットのQRを読む" />
         <View style={styles.center}>
           <ActivityIndicator size="large" color={colors.driver} />
         </View>
@@ -152,12 +152,12 @@ export default function DriverScanScreen() {
   if (!permission.granted) {
     return (
       <SafeAreaView style={styles.safe}>
-        <ScreenHeader title="代理人QRを読む" />
+        <ScreenHeader title="受取スポットのQRを読む" />
         <View style={styles.center}>
           <Ionicons name="camera-outline" size={48} color={colors.driver} />
           <Text style={styles.permTitle}>カメラの利用許可が必要です</Text>
           <Text style={styles.permSub}>
-            代理人のQRコードを読み取るには、カメラへのアクセスを許可してください。
+            代理受取スポットのQRコードを読み取るには、カメラへのアクセスを許可してください。
           </Text>
           {permission.canAskAgain ? (
             <PrimaryButton
@@ -184,7 +184,7 @@ export default function DriverScanScreen() {
 
   return (
     <SafeAreaView style={styles.safe}>
-      <ScreenHeader title="代理人QRを読む" />
+      <ScreenHeader title="受取スポットのQRを読む" />
 
       {phase === 'scanning' && (
         <View style={styles.scannerContainer}>
@@ -195,7 +195,7 @@ export default function DriverScanScreen() {
             onBarcodeScanned={scanned ? undefined : handleScanned}
           />
           <View style={styles.scanOverlay}>
-            <Text style={styles.scanText}>代理人のQRコードをスキャン</Text>
+            <Text style={styles.scanText}>代理受取スポットのQRコードをスキャン</Text>
             <View style={styles.scanFrame} />
           </View>
         </View>
@@ -213,13 +213,13 @@ export default function DriverScanScreen() {
           <Card>
             <View style={styles.resultRow}>
               <Ionicons name="checkmark-circle" size={28} color={colors.green} />
-              <Text style={styles.resultTitle}>代理人へ受け渡し完了</Text>
+              <Text style={styles.resultTitle}>代理受取スポットへ受け渡し完了</Text>
             </View>
-            <Text style={styles.resultSub}>荷物を代理人へ引き渡しました。</Text>
+            <Text style={styles.resultSub}>荷物を代理受取スポットへ引き渡しました。</Text>
             {statusConfirmed === true ? (
               <View style={styles.confirmRow}>
                 <Ionicons name="cube" size={16} color={colors.driver} />
-                <Text style={styles.confirmText}>ステータス: 代理人へ受け渡し済み</Text>
+                <Text style={styles.confirmText}>ステータス: 代理受取スポットへ受け渡し済み</Text>
               </View>
             ) : (
               // statusConfirmed === null（確認不能）。verify 自体は成功している。
@@ -243,7 +243,7 @@ export default function DriverScanScreen() {
               <Text style={styles.warnTitle}>荷物を確認してください</Text>
             </View>
             <Text style={styles.resultSub}>
-              QRの照合は成功しましたが、選択中の荷物が「代理人へ受け渡し済み」になっていません。
+              QRの照合は成功しましたが、選択中の荷物が「代理受取スポットへ受け渡し済み」になっていません。
               別の荷物のQRコードを読み取った可能性があります。荷物を確認してください。
             </Text>
           </Card>

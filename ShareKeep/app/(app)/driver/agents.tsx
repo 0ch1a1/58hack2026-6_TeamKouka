@@ -106,7 +106,7 @@ export default function DriverAgentsScreen() {
       setAgents(data ?? []);
     } catch (error) {
       logError('driver/agents:loadAgents', error);
-      Alert.alert('エラー', '代理人情報の取得に失敗しました。');
+      Alert.alert('エラー', '代理受取スポット情報の取得に失敗しました。');
       setAgents([]);
     } finally {
       setLoading(false);
@@ -158,7 +158,7 @@ export default function DriverAgentsScreen() {
         ]);
       } catch (error) {
         logError('driver/agents:doAssign', error);
-        Alert.alert('エラー', '代理人の割り当てに失敗しました。');
+        Alert.alert('エラー', '代理受取スポットの割り当てに失敗しました。');
       } finally {
         setAssigningId(null);
         assigningRef.current = false;
@@ -172,7 +172,7 @@ export default function DriverAgentsScreen() {
     (agent: AgentLocation) => {
       if (assigningRef.current) return;
       Alert.alert(
-        'この代理人に割り当てますか？',
+        'この代理受取スポットに割り当てますか？',
         `${agent.full_name}\n${agent.address}`,
         [
           { text: 'キャンセル', style: 'cancel' },
@@ -218,7 +218,7 @@ export default function DriverAgentsScreen() {
           ) : (
             <>
               <Ionicons name="checkmark-circle-outline" size={16} color={colors.white} />
-              <Text style={styles.assignButtonText}>この代理人に割り当てる</Text>
+              <Text style={styles.assignButtonText}>この代理受取スポットに割り当てる</Text>
             </>
           )}
         </TouchableOpacity>
@@ -228,7 +228,7 @@ export default function DriverAgentsScreen() {
 
   return (
     <SafeAreaView style={styles.safe}>
-      <ScreenHeader title="代理人を探す" />
+      <ScreenHeader title="代理受取スポットを探す" />
 
       {loading ? (
         <View style={styles.center}>
@@ -237,7 +237,7 @@ export default function DriverAgentsScreen() {
       ) : agents.length === 0 ? (
         <EmptyState
           icon="people-outline"
-          message="対応可能な代理人が見つかりません"
+          message="対応可能な代理受取スポットが見つかりません"
           style={styles.emptyState}
         />
       ) : (
@@ -261,7 +261,7 @@ export default function DriverAgentsScreen() {
                 <MapFallback />
               )}
               <Text style={styles.listHint}>
-                ピンまたは下のカードから代理人を選んでください
+                ピンまたは下のカードから代理受取スポットを選んでください
               </Text>
             </View>
           }

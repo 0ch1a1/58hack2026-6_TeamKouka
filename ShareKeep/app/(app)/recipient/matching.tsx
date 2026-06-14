@@ -109,10 +109,10 @@ function SelectView({
 
   return (
     <SafeAreaView style={styles.safe}>
-      <ScreenHeader title="代理人を選ぶ" />
+      <ScreenHeader title="代理受取スポットを選ぶ" />
       <ScrollView contentContainerStyle={styles.listContent}>
         <Text style={styles.selectIntro}>
-          おすすめ順に表示しています。{'\n'}預ける代理人を選んでください。
+          おすすめ順に表示しています。{'\n'}預ける代理受取スポットを選んでください。
         </Text>
         {candidates.map((agent) => (
           <AgentCard
@@ -130,7 +130,7 @@ function SelectView({
             <Text style={styles.excludedTitle}>除外された候補</Text>
             {excluded.map((item) => (
               <Text key={item.agent_id} style={styles.excludedItem}>
-                {(item.full_name ?? '代理人')} ・ {formatDistance(item.distance_meters)} ・ {item.reason}
+                {(item.full_name ?? '代理受取スポット')} ・ {formatDistance(item.distance_meters)} ・ {item.reason}
               </Text>
             ))}
           </View>
@@ -138,7 +138,7 @@ function SelectView({
       </ScrollView>
       <View style={styles.footer}>
         <PrimaryButton
-          label="この代理人に預ける"
+          label="この代理受取スポットに預ける"
           icon="checkmark-circle-outline"
           onPress={onConfirm}
           loading={assigning}
@@ -167,10 +167,10 @@ function WaitingView({
         </View>
 
         <Text style={styles.title}>
-          {mode === 'loading' ? '近くの代理人を探しています' : '代理人を手配しています'}
+          {mode === 'loading' ? '近くの代理受取スポットを探しています' : '代理受取スポットを手配しています'}
         </Text>
         <Text style={styles.desc}>
-          近くの代理人が見つかり次第、{'\n'}荷物を届けに向かいます。
+          近くの代理受取スポットが見つかり次第、{'\n'}荷物を届けに向かいます。
         </Text>
 
         <LoadingDots />
@@ -184,7 +184,7 @@ function WaitingView({
         </Card>
 
         <Text style={styles.note}>
-          代理人が決まると自動的に次の画面に進みます。{'\n'}このままお待ちいただくか、アプリを閉じても大丈夫です。
+          代理受取スポットが決まると自動的に次の画面に進みます。{'\n'}このままお待ちいただくか、アプリを閉じても大丈夫です。
         </Text>
       </View>
     </SafeAreaView>
@@ -233,7 +233,7 @@ function AgentCard({
           {/* 機能7': 代理人の顔写真。未設定なら頭文字プレースホルダ。 */}
           <Avatar uri={avatarUrl} name={agent.full_name} size={40} />
           <View style={styles.agentNameWrap}>
-            <Text style={styles.agentName}>{agent.full_name ?? '代理人'}</Text>
+            <Text style={styles.agentName}>{agent.full_name ?? '代理受取スポット'}</Text>
             <View style={styles.agentMetaRow}>
               <Ionicons name="location-outline" size={13} color={colors.gray} />
               <Text style={styles.agentMeta}>{areaLabel}</Text>

@@ -51,8 +51,8 @@ export const DRIVER_STATUS_LABEL: Record<ParcelStatus, string> = {
   created: '配達前',
   out_for_delivery: '配達中',
   delivery_failed: '不在（代理受付待ち）',
-  agent_assigned: '代理人決定',
-  delivered_to_agent: '代理人へ受け渡し済み',
+  agent_assigned: '代理受取スポット決定',
+  delivered_to_agent: '代理受取スポットへ受け渡し済み',
   handed_to_recipient: '受取人へ引き渡し済み',
   completed: '完了',
 };
