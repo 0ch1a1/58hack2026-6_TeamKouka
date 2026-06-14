@@ -36,6 +36,16 @@ def _to_int(value: Any) -> int | None:
         return None
 
 
+REASON_NOT_APPROVED = "審査未承認のため除外"
+REASON_UNAVAILABLE_TODAY = "本日対応停止のため除外"
+REASON_NO_CAPACITY = "空き枠なしのため除外"
+REASON_INDIVIDUAL_NG = "個人スポットNG設定のため除外"
+
+# 受取人に存在・名称・距離を明かさない除外理由。モデレーション状態(審査外/停止/却下)の
+# 漏洩を防ぐため、これらの除外候補はレスポンスの excluded には載せない(スコア/ログ対象外なのは同じ)。
+PRIVATE_EXCLUSION_REASONS = {REASON_NOT_APPROVED}
+
+
 def _exclusion_reason(
     candidate: dict[str, Any], *, allow_individual_spots: bool
 ) -> str | None:
@@ -43,16 +53,19 @@ def _exclusion_reason(
 
     判定は指定の順序で行い、最初に一致した理由のみを採用する。
     """
-    if candidate.get("review_status") != "approved":
-        return "審査未承認のため除外"
+    review_status = candidate.get("review_status")
+    # 列未適用(None)時は除外しない安全側。値が存在し approved 以外のときのみ除外する。
+    # (DB migration 未適用のAPI単体デプロイで全候補が消える契約破壊を防ぐ)
+    if review_status is not None and review_status != "approved":
+        return REASON_NOT_APPROVED
     if candidate.get("is_available_today") is False:
-        return "本日対応停止のため除外"
+        return REASON_UNAVAILABLE_TODAY
     current = _to_int(candidate.get("current_storage_count"))
     maximum = _to_int(candidate.get("max_storage_count"))
     if current is not None and maximum is not None and current >= maximum:
-        return "空き枠なしのため除外"
+        return REASON_NO_CAPACITY
     if candidate.get("spot_type") == "individual" and not allow_individual_spots:
-        return "個人スポットNG設定のため除外"
+        return REASON_INDIVIDUAL_NG
     return None
 
 
@@ -103,9 +116,14 @@ def _format_hhmm(value: Any) -> str | None:
 
 
 def _capacity_label(candidate: dict[str, Any]) -> str:
-    maximum = _to_int(candidate.get("max_storage_count")) or 0
-    current = _to_int(candidate.get("current_storage_count")) or 0
-    return f"空き枠 {maximum - current}/{maximum}"
+    maximum = _to_int(candidate.get("max_storage_count"))
+    current = _to_int(candidate.get("current_storage_count"))
+    # どちらか欠落時は誤解を招く "n/n" を出さず情報なし扱い (フィルタの null=除外しない と整合)。
+    if maximum is None or current is None:
+        return "空き枠 情報なし"
+    # current > maximum の不整合データでも負値を出さないようクランプ。
+    available = max(maximum - current, 0)
+    return f"空き枠 {available}/{maximum}"
 
 
 class RecommendationService:
@@ -149,11 +167,18 @@ class RecommendationService:
         self._persist_logs(parcel_id, recipient_id, ranked)
         recommendations = self._build_recommendations(ranked, request.top_k)
 
+        # モデレーション状態の漏洩を防ぐため、審査外などの「非公開」除外は受取人へ返さない。
+        visible_excluded = [
+            item
+            for item in excluded
+            if item["reason"] not in PRIVATE_EXCLUSION_REASONS
+        ]
+
         return RecommendResponse(
             model_version=self._model.version,
             generated_at=datetime.now(timezone.utc),
             recommendations=recommendations,
-            excluded=self._build_excluded(excluded),
+            excluded=self._build_excluded(visible_excluded),
             fallback_used=self._model.is_fallback,
         )
 
