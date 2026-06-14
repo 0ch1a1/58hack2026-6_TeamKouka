@@ -130,9 +130,9 @@ export default function AgentProfileScreen() {
         startTime: timeFrom,
         endTime: timeTo,
       });
-    } catch {
+    } catch (err) {
       setSaving(false);
-      Alert.alert('エラー', 'プロファイルの保存に失敗しました。');
+      Alert.alert('エラー', `プロファイルの保存に失敗しました。\n${String(err)}`);
       return;
     }
 

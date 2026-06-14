@@ -119,14 +119,19 @@ export async function geocodeAgentAddress(params: {
   // Nominatim で住所 → 座標に変換し、直接 upsert_agent_profile RPC を呼ぶ。
   // (旧実装は Edge Function 経由だったが未デプロイのためクライアント直接実装に変更)
   const query = encodeURIComponent(params.address)
-  const geoRes = await fetch(
-    `https://nominatim.openstreetmap.org/search?q=${query}&format=json&limit=1`,
-    { headers: { 'Accept-Language': 'ja', 'User-Agent': 'ShareKeep/1.0' } },
-  )
-  if (!geoRes.ok) throw new Error(`Geocoding failed: ${geoRes.status}`)
+  let geoRes: Response
+  try {
+    geoRes = await fetch(
+      `https://nominatim.openstreetmap.org/search?q=${query}&format=json&limit=1`,
+      { headers: { 'Accept-Language': 'ja', 'User-Agent': 'ShareKeep/1.0' } },
+    )
+  } catch (fetchErr) {
+    throw new Error(`[geocode-fetch] ${String(fetchErr)}`)
+  }
+  if (!geoRes.ok) throw new Error(`[geocode-http] ${geoRes.status}`)
 
   const geoData = (await geoRes.json()) as Array<{ lat: string; lon: string; display_name: string }>
-  if (!geoData.length) throw new Error('住所が見つかりませんでした')
+  if (!geoData.length) throw new Error('[geocode-empty] 住所が見つかりませんでした')
 
   const lat = parseFloat(geoData[0].lat)
   const lng = parseFloat(geoData[0].lon)
@@ -142,7 +147,7 @@ export async function geocodeAgentAddress(params: {
     p_start_time: params.startTime ?? null,
     p_end_time: params.endTime ?? null,
   })
-  if (error) throw error
+  if (error) throw new Error(`[rpc] ${error.message} (code: ${error.code})`)
 
   return { success: true, address: displayName, latitude: lat, longitude: lng }
 }
