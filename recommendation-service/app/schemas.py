@@ -15,6 +15,9 @@ class RecommendRequest(BaseModel):
     radius_m: int = Field(default=2000, ge=1, le=20000)
     top_k: int = Field(default=5, ge=1, le=50)
     target_at: datetime | None = None
+    # 個人スポット（spot_type == "individual"）を候補に含めるか。
+    # False のときはハードフィルタで個人スポットを除外する。
+    allow_individual_spots: bool = True
 
 
 class RecommendationItem(BaseModel):
@@ -25,6 +28,16 @@ class RecommendationItem(BaseModel):
     distance_meters: float
     breakdown: dict[str, float]
     reasons: list[str]
+    spot_type: str
+    capacity_label: str
+    pickup_window_label: str
+
+
+class ExcludedSpot(BaseModel):
+    agent_id: UUID | str
+    full_name: str | None = None
+    distance_meters: float
+    reason: str
 
 
 class RecommendResponse(BaseModel):
@@ -34,6 +47,8 @@ class RecommendResponse(BaseModel):
     model_version: str
     generated_at: datetime
     recommendations: list[RecommendationItem]
+    excluded: list[ExcludedSpot] = Field(default_factory=list)
+    fallback_used: bool = False
 
 
 class FeedbackRequest(BaseModel):

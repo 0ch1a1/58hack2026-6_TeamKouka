@@ -68,6 +68,9 @@ class SupabaseGateway:
                 "p_radius_m": radius_m,
             },
         ).execute()
+        # RPC の返す行をそのまま素通し（明示マッピングしない）ため、RPC 側で追加された
+        # spot_type / max_storage_count / current_storage_count / is_available_today /
+        # review_status を含むすべての列がそのまま各候補 dict に流れる。
         return list(response.data or [])
 
     def get_recipient_coordinates(self, recipient_id: str) -> tuple[float, float]:
