@@ -28,9 +28,10 @@ export type RecommendedAgent = {
 }
 
 // 候補から除外された代理人（理由付き）。「なぜ絞り込まれたか」を UI で開示するために返る。
+// full_name は API(ExcludedSpot)側が nullable のため型を合わせる。
 export type ExcludedAgent = {
   agent_id: string
-  full_name: string
+  full_name: string | null
   distance_meters: number
   reason: string
 }

@@ -155,8 +155,11 @@ export function useMatchingLogic(parcelId: string | undefined): MatchingLogic {
           topK: 8,
         });
         if (cancelled) return;
-        if (agents.length === 0) {
-          // 圏内に候補なし → 自動マッチも空振りする可能性が高いが、従来挙動に委ねる
+        // サービスが健全に応答した結果は尊重する。ハードフィルタで全除外された場合
+        // (excluded あり) は旧経路の無フィルタ自動割当に流さず、除外理由を提示する
+        // （未承認/満枠/個人NG スポットを抜け道で割り当てない）。
+        if (agents.length === 0 && excludedAgents.length === 0) {
+          // 圏内に対象スポットが一つも無い → 従来の自動マッチに委ねる
           await fallbackAutoMatch(latitude, longitude);
           return;
         }

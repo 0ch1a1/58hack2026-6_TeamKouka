@@ -45,6 +45,8 @@ function spotTypeLabel(spotType: SpotType | undefined): string | null {
 
 // 距離（メートル）を「150m」「1.2km」形式に整形。カードと除外セクションで共用。
 function formatDistance(meters: number): string {
+  // distance_meters 欠落時に "NaNm" を出さないよう非有限値をガード。
+  if (!Number.isFinite(meters)) return '距離不明';
   return meters >= 1000
     ? `${(meters / 1000).toFixed(1)}km`
     : `${Math.round(meters)}m`;
@@ -128,7 +130,7 @@ function SelectView({
             <Text style={styles.excludedTitle}>除外された候補</Text>
             {excluded.map((item) => (
               <Text key={item.agent_id} style={styles.excludedItem}>
-                {item.full_name} ・ {formatDistance(item.distance_meters)} ・ {item.reason}
+                {(item.full_name ?? '代理人')} ・ {formatDistance(item.distance_meters)} ・ {item.reason}
               </Text>
             ))}
           </View>
