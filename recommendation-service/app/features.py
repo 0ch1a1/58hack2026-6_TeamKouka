@@ -29,6 +29,8 @@ __all__ = [
     "clamp",
     "calculate_time_score",
     "calculate_rating_score",
+    "calculate_spot_type_score",
+    "SPOT_TYPE_SCORES",
     "normalize_weekdays",
     "calculate_day_match",
     "build_features",
@@ -45,7 +47,15 @@ FEATURE_NAMES = [
     "is_weekend",
     "is_evening",
     "rating_score",
+    "spot_type_score",
 ]
+
+SPOT_TYPE_SCORES = {
+    "store": 1.0,
+    "manager_room": 0.7,
+    "facility": 0.6,
+    "individual": 0.3,
+}
 
 DAY_ALIASES = {
     "mon": 0,
@@ -215,6 +225,13 @@ def calculate_rating_score(avg_rating: Any) -> float:
     return clamp((value - RATING_MIN) / (RATING_MAX - RATING_MIN))
 
 
+def calculate_spot_type_score(spot_type: Any) -> float:
+    """spot_type 文字列を 0..1 のスコアに変換。None/未知/未取得は 0.6。"""
+    if spot_type is None:
+        return 0.6
+    return clamp(SPOT_TYPE_SCORES.get(str(spot_type), 0.6))
+
+
 def build_features(
     raw: dict[str, Any] | Any,
     now: datetime | str | None,
@@ -243,6 +260,7 @@ def build_features(
         "is_weekend": 1.0 if local_now.weekday() >= WEEKEND_WEEKDAY_THRESHOLD else 0.0,
         "is_evening": 1.0 if now_minute >= EVENING_START_MINUTE else 0.0,
         "rating_score": calculate_rating_score(_get(raw, "avg_rating")),
+        "spot_type_score": calculate_spot_type_score(_get(raw, "spot_type")),
     }
     return {name: float(features[name]) for name in FEATURE_NAMES}
 

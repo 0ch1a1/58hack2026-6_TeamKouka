@@ -6,7 +6,12 @@ import pytest
 
 from app.config import FALLBACK_SCORE_BIAS, FALLBACK_SCORE_SCALE
 from app.features import FEATURE_NAMES
-from app.model import FALLBACK_WEIGHTS, RecommendationModel, build_reasons
+from app.model import (
+    FALLBACK_WEIGHTS,
+    REASON_LABELS,
+    RecommendationModel,
+    build_reasons,
+)
 from app.utils import sigmoid
 
 
@@ -101,3 +106,41 @@ def test_build_reasons_respects_limit():
     breakdown = _features(**{n: 1.0 for n in FEATURE_NAMES})
     reasons = build_reasons(features, breakdown, limit=2)
     assert len(reasons) == 2
+
+
+# --- lockstep（特徴量 ↔ 重み/ラベルの同期） --------------------------------
+
+
+def test_every_feature_has_weight_and_label():
+    # 特徴量追加時に FALLBACK_WEIGHTS / REASON_LABELS の更新漏れを検知する。
+    # 重み欠落は _fallback_predict が KeyError、ラベル欠落は内部名がレスポンスに漏れる。
+    assert set(FEATURE_NAMES) <= set(FALLBACK_WEIGHTS)
+    assert set(FEATURE_NAMES) <= set(REASON_LABELS)
+
+
+def test_spot_type_score_reason_label_present():
+    features = _features(spot_type_score=1.0)
+    breakdown = _features(spot_type_score=0.3)
+    reasons = build_reasons(features, breakdown)
+    assert REASON_LABELS["spot_type_score"] in reasons
+
+
+# --- 特徴量セット不一致時の fallback 降格（旧 artifact でも起動を止めない） ---
+
+
+def test_model_falls_back_on_feature_mismatch(tmp_path):
+    import joblib
+
+    path = tmp_path / "stale_model.joblib"
+    # 旧仕様を模した特徴量セット不一致の artifact。
+    joblib.dump({"feature_names": ["only_one_feature"], "version": "old-9"}, path)
+
+    model = RecommendationModel(path)
+
+    # raise せず fallback に降格していること。
+    assert model.is_fallback is True
+    assert model.artifact is None
+    assert model.feature_names == FEATURE_NAMES
+    # fallback でも予測は成立する。
+    [prediction] = model.predict([{n: 0.5 for n in FEATURE_NAMES}])
+    assert 0.0 <= prediction.score <= 1.0
